@@ -75,10 +75,13 @@ class GUI():
         # self.connectionl.pack(side=LEFT, anchor=SW)
         self.textboxes = scrolledtext.ScrolledText(root, undo=True)
         self.textboxes.pack(expand=True, fill='both')
+        self.addToTextbox("Not Started")
+    
+    def addToTextbox(self, message):
         self.textboxes.config(state=NORMAL)
-        self.textboxes.insert(END, "Not Started\n")
+        self.textboxes.insert(END, message +"\n")
         self.textboxes.config(state=DISABLED)
-
+        
     def generateKKPAExcel(self):
         workbook = xlsxwriter.Workbook('kkpa.xlsx')
         worksheet = workbook.add_worksheet()
@@ -93,9 +96,7 @@ class GUI():
         workbook.close()
 
     def generateKKPAFromRawData(self, client_raw_data):
-        self.textboxes.config(state=NORMAL)
-        self.textboxes.insert(END,"generate KKPA start ...\n")
-        self.textboxes.config(state=DISABLED)
+        self.addToTextbox("generate KKPA start ...")
         dict_raw_data = client_raw_data
         document = Document()
         owner_name = dict_raw_data.get('nama_pekerja')
@@ -153,9 +154,7 @@ class GUI():
         document.save("kkpa " + owner_name + ".docx")
 
     def socket_thread(self):
-        self.textboxes.config(state=NORMAL)
-        self.textboxes.insert(END,"thread started..\n")
-        self.textboxes.config(state=DISABLED)
+        self.addToTextbox("thread started..")
         self.server_ip = str(self.ip_port_entry.get().split(":")[0])
         self.server_port = int(self.ip_port_entry.get().split(":")[1])
         self.max_number = int(self.max_number_entry.get())
@@ -169,14 +168,11 @@ class GUI():
         while(self.running == 1):
             (self.conn, self.addr) = self.serverSocket.accept()
             
-            self.textboxes.config(state=NORMAL)
-            self.textboxes.insert(END,"CONNECTED!\n")
-            self.textboxes.config(state=DISABLED)
+            self.addToTextbox("CONNECTED!")
             self.count = self.count + 1
             
-            self.textboxes.config(state=NORMAL)
-            self.textboxes.insert(END,"Accepted {} connections so far, from {} \n".format(self.count, self.addr[0]))
-            self.textboxes.config(state=DISABLED)
+            self.addToTextbox("Accepted {} connections so far, from {} \n".format(self.count, self.addr[0]))
+            
             # try:
             while True:
                 self.rc = self.conn.recv(4096000000)
@@ -188,9 +184,7 @@ class GUI():
                         self.header_list = list(self.dic_data.keys())
                     self.collection_data_value_only.append(list(self.dic_data.values())) 
                     self.conn.sendall(str.encode("Received !!"))
-                    self.textboxes.config(state=NORMAL)
-                    self.textboxes.insert(END, "Received!\n")
-                    self.textboxes.config(state=DISABLED)
+                    self.addToTextbox("Received!")
                     self.textboxes.see(END)
                     self.conn.close()
                 break
@@ -205,36 +199,26 @@ class GUI():
             with open('readme_client_header.txt', 'w') as f:
                 f.write(str(self.header_list))
                 f.close()
-        self.textboxes.config(state=NORMAL)
-        self.textboxes.insert(END,"Ended! \n")
-        self.textboxes.config(state=DISABLED)
+        self.addToTextbox("Ended!")
         self.textboxes.see(END)
         self.serverSocket.close()
 
     def startc(self):
         if self.running == 0:
-            self.textboxes.config(state=NORMAL)
-            self.textboxes.insert(END,"Starting thread\n")
-            self.textboxes.config(state=DISABLED)
+            self.addToTextbox("Starting thread")
             self.running = 1
             self.threads = Thread(target=self.socket_thread, daemon=True)
             self.threads.start()
         else:
-            self.textboxes.config(state=NORMAL)
-            self.textboxes.insert(END,"thread already started.\n")
-            self.textboxes.config(state=DISABLED)
+            self.addToTextbox("thread already started.")
 
     def stopc(self):
         if self.running == 1:
-            self.textboxes.config(state=NORMAL)
-            self.textboxes.insert(END,"stopping thread...\n")
-            self.textboxes.config(state=DISABLED)
+            sself.addToTextbox("stopping thread...")
             self.running = 0
             # self.threads.join()
         else:
-            self.textboxes.config(state=NORMAL)
-            self.textboxes.insert(END,"thread not running...\n")
-            self.textboxes.config(state=DISABLED)
+            self.addToTextbox("thread not running...")
 
 
 root = Tk()
