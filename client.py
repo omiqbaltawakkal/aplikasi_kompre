@@ -43,7 +43,7 @@ report_collection = dict()
 
 image_filepath_list = list()
 
-image_dict_list = ["Task Manager", "fisik"]
+image_dict_list = ["Task Manager", "fisik", "bribox"]
 # "stiker bribox", "dxdiag image", "saved password"
 
 
@@ -247,8 +247,9 @@ def upload_file(collection_key, image_file_path):
 
 def sendDataToHost(socketObject, message):
     print("Start Sending to Receiver..")
-    bytes = str.encode(message)
-    socketObject.send(bytes)
+    bytess = str.encode(message)
+    print(len(bytess))
+    socketObject.sendall(bytess)
 
     while(True):
         data = socketObject.recv(1024)
@@ -258,35 +259,37 @@ def sendDataToHost(socketObject, message):
 
     socketObject.close()
 
+def powershellListFunction():
+    getLANIPAddress("ip_address")    
+    getDevicesBrand("computer_name")
+    getOSValues("os_values")
+    getProcessorCapacity("processor_capacity", "processor_utilization")
+    getMemoryCapacity("memory_capacity", "memory_utilization")
+    getRemoteDesktopPortStatus("remote_desktop_status")
+    getNetworkTimeProtocol("network_time_protocol_Status")
+    getDiskCapacity("list_of_storage_information")
+    getAntivirusProduct("list_of_antiviruses")
+    getScreenSaverStatus("list_of_screen_saver_status")
+
 
 def getPersonalInformation():
     server_ip = str(ip_entry.get().split(":")[0])
     server_port = int(ip_entry.get().split(":")[1])
     # Label(second_frame, text='Start Gather').pack()
-    if not report_collection:
-        recordUpdate(report_collection, "nama_pekerja", worker_name_entry.get())
-        recordUpdate(report_collection, "tanggal",  str(datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
-        recordUpdate(report_collection, "pN_pekerja", personal_number_entry.get())
-        recordUpdate(report_collection, "jabatan_pekerja", worker_role_entry.get())
-        recordUpdate(report_collection, "kode_uker",
-                    worker_branch_code_entry.get())
+    # if not report_collection:
+    recordUpdate(report_collection, "nama_pekerja", worker_name_entry.get())
+    recordUpdate(report_collection, "tanggal",  str(datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
+    recordUpdate(report_collection, "pN_pekerja", personal_number_entry.get())
+    recordUpdate(report_collection, "jabatan_pekerja", worker_role_entry.get())
+    recordUpdate(report_collection, "kode_uker",
+                worker_branch_code_entry.get())
+    powershellListFunction()
+    # for x in range(len(image_filepath_list)):
+    #     collection_name = (
+    #         "image_" + "_".join(image_dict_list[x].split(" "))).lower()
+    #     upload_file(collection_name, image_filepath_list[x])
 
-        getLANIPAddress("ip_address")    
-        getDevicesBrand("computer_name")
-        getOSValues("os_values")
-        getProcessorCapacity("processor_capacity", "processor_utilization")
-        getMemoryCapacity("memory_capacity", "memory_utilization")
-        getRemoteDesktopPortStatus("remote_desktop_status")
-        getNetworkTimeProtocol("network_time_protocol_Status")
-        getDiskCapacity("list_of_storage_information")
-        getAntivirusProduct("list_of_antiviruses")
-        getScreenSaverStatus("list_of_screen_saver_status")
-        for x in range(len(image_filepath_list)):
-            collection_name = (
-                "image_" + "_".join(image_dict_list[x].split(" "))).lower()
-            upload_file(collection_name, image_filepath_list[x])
-
-    with open('readme.txt', 'w') as f:
+    with open('readme '+worker_name_entry.get()+'.txt', 'w') as f:
         f.write(str(report_collection))
         f.close()
     socketObject = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -384,17 +387,17 @@ if __name__ == '__main__':
     # open image
     
     rows = x+1+4
-    for item in image_dict_list:
-        attachment_label = Label(root, text=f'Attachment {item} : ')
-        attachment_label.grid(column = 0, row = rows, sticky='w', pady=20)
-        # attachment_label.pack(fill=X, expand=True)
+    # for item in image_dict_list:
+    #     attachment_label = Label(root, text=f'Attachment {item} : ')
+    #     attachment_label.grid(column = 0, row = rows, sticky='w', pady=20)
+    #     # attachment_label.pack(fill=X, expand=True)
 
-        attachment_button = ttk.Button(
-            root,
-            text='Open Attachment Image',
-            command=saveImagePath
-        ).grid(column = 1, row = rows, sticky='nesw', pady=20)
-        rows+=1
+    #     attachment_button = ttk.Button(
+    #         root,
+    #         text='Open Attachment Image',
+    #         command=saveImagePath
+    #     ).grid(column = 1, row = rows, sticky='nesw', pady=20)
+    #     rows+=1
 
     start_button = ttk.Button(
         root,
