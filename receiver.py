@@ -34,9 +34,8 @@ class GUI():
 
         self.server_ip = "10.233.79.249"
         self.server_port = 50392
-
-        self.collection_data_value_only = list()
-        self.header_list = list()
+        
+        self.excel_data = dict()
 
         self.screen_width = root.winfo_screenwidth()
         self.screen_height = root.winfo_screenheight()
@@ -68,11 +67,6 @@ class GUI():
         self.startb = Button(self.frame, text="Start", command=self.startc)
         self.startb.pack(side=LEFT, anchor=N)
 
-        # self.stopb = Button(self.frame, text="Stop", command=self.stopc)
-        # self.stopb.pack(side=LEFT, anchor=N)
-
-        # self.connectionl = Label(self.frame, text="Not Started")
-        # self.connectionl.pack(side=LEFT, anchor=SW)
         self.textboxes = scrolledtext.ScrolledText(root, undo=True)
         self.textboxes.pack(expand=True, fill='both')
         self.addToTextbox("Not Started")
@@ -85,13 +79,6 @@ class GUI():
     def generateKKPAExcel(self):
         workbook = xlsxwriter.Workbook('kkpa.xlsx')
         worksheet = workbook.add_worksheet()
-
-        for x in range(len(header_list)):
-            worksheet.write(0, x, str(header_list[x]))
-
-        for x in range(len(collection_data_value_only)):
-            for y in range(len(collection_data_value_only[0])):
-                worksheet.write(1+x, y, str(collection_data_value_only[x][y]))
 
         workbook.close()
 
@@ -152,6 +139,15 @@ class GUI():
                     key.replace("_", " ").title()).bold = True
                 doc.add_run(" : {} ".format(value))
         document.save("kkpa " + owner_name + ".docx")
+    
+    def excel_collecting(self, dic_data):
+        for key, value in dic_data.items():
+            if self.excel_data.get(key):
+                self.excel_data.get(key).append(value)
+            else:
+                temp = list()
+                temp.append(value)
+                self.excel_data.update({ key : temp}) 
 
     def socket_thread(self):
         self.addToTextbox("thread started..")
@@ -175,14 +171,12 @@ class GUI():
             
             # try:
             while True:
-                self.rc = self.conn.recv(4096000000)
+                self.rc = self.conn.recv(4096)
                 if self.rc != b'':
                     self.raw_data = self.rc.decode().replace("\'", "\"")
                     self.dic_data = json.loads(self.raw_data)
                     self.generateKKPAFromRawData(self.dic_data)
-                    if not self.header_list:
-                        self.header_list = list(self.dic_data.keys())
-                    self.collection_data_value_only.append(list(self.dic_data.values())) 
+                    self.excel_collecting(self.dic_data)
                     self.conn.sendall(str.encode("Received !!"))
                     self.addToTextbox("Received!")
                     self.textboxes.see(END)
@@ -214,7 +208,7 @@ class GUI():
 
     def stopc(self):
         if self.running == 1:
-            sself.addToTextbox("stopping thread...")
+            self.addToTextbox("stopping thread...")
             self.running = 0
             # self.threads.join()
         else:

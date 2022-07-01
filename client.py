@@ -232,9 +232,9 @@ def getScreenSaverStatus(collection_key):
 def getUsbHardeningStatus(collection_key):
     hardening_status = callPowershellFunc("Get-ItemPropertyValue \"HKLM:\\SYSTEM\\CurrentControlSet\\services\\USBSTOR\" -Name \"Start\"")
     if int(hardening_status) == 3:
-        report_collection.update({collection_key : "Enabled"})
+        report_collection.update({collection_key : "Ya"})
     else: 
-        report_collection.update({collection_key : "Disabled"})
+        report_collection.update({collection_key : "Tidak"})
 
 
 def saveImagePath():
@@ -277,6 +277,7 @@ def powershellListFunction():
     getDiskCapacity("list_of_storage_information")
     getAntivirusProduct("list_of_antiviruses")
     getScreenSaverStatus("list_of_screen_saver_status")
+    getUsbHardeningStatus("hardening_status")
 
 
 def getPersonalInformation():
@@ -301,8 +302,8 @@ def getPersonalInformation():
     with open('readme '+worker_name_entry.get()+'.txt', 'w') as f:
         f.write(str(report_collection))
         f.close()
-    socketObject = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    socketObject.connect((server_ip, server_port))
+    # socketObject = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # socketObject.connect((server_ip, server_port))
     # # Label(second_frame, text='Connected to designated IP for sending..').pack()
     # sendDataToHost(socketObject, str(report_collection))
 
