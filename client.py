@@ -182,11 +182,11 @@ def getRemoteDesktopPortStatus(collection_key):
 def getLANIPAddress(collection_key):
     # Label(second_frame, text= "Getting IP Address..").pack() 
     result = callPowershellFunc(
-        "(Get-NetIPAddress -AddressFamily IPV4 -InterfaceAlias \"Ethernet*\").IPAddress")
+        "Get-WmiObject win32_networkadapterconfiguration | Select-Object -Property @{Name = 'IPAddress' ; Expression = {($PSItem.IPAddress[0])}}, MacAddress | Where IPAddress -NE $null | ft -HideTableHeaders")
     #Get-WmiObject Win32_NetworkAdapterConfiguration -Filter "DHCPEnabled=$True" | Where-Object {$_.IPEnabled -AND $_.IPAddress -gt 0} |Select-object IPAddress, MACAddress
     if result:
         report_collection.update(
-            {collection_key: result.decode("utf-8").strip().split('\r\n')})
+            {collection_key: result.decode("utf-8").strip().split(" ")})
     else:
         report_collection.update({collection_key: "IP Not Found"})
     # Label(second_frame, text= "Success Getting IP Address..").pack() 
@@ -228,6 +228,13 @@ def getScreenSaverStatus(collection_key):
     report_collection.update(
         {collection_key: screen_saver})
     print("Success Getting Screen Saver Status..")
+    
+def getUsbHardeningStatus(collection_key):
+    hardening_status = callPowershellFunc("Get-ItemPropertyValue \"HKLM:\\SYSTEM\\CurrentControlSet\\services\\USBSTOR\" -Name \"Start\"")
+    if int(hardening_status) == 3:
+        report_collection.update({collection_key : "Enabled"})
+    else: 
+        report_collection.update({collection_key : "Disabled"})
 
 
 def saveImagePath():
@@ -283,6 +290,8 @@ def getPersonalInformation():
     recordUpdate(report_collection, "jabatan_pekerja", worker_role_entry.get())
     recordUpdate(report_collection, "kode_uker",
                 worker_branch_code_entry.get())
+    recordUpdate(report_collection, "condition", clicked_cond.get())
+    recordUpdate(report_collection, "bribox_sticker", clicked_bribox.get())
     powershellListFunction()
     # for x in range(len(image_filepath_list)):
     #     collection_name = (
@@ -295,7 +304,7 @@ def getPersonalInformation():
     socketObject = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     socketObject.connect((server_ip, server_port))
     # # Label(second_frame, text='Connected to designated IP for sending..').pack()
-    sendDataToHost(socketObject, str(report_collection))
+    # sendDataToHost(socketObject, str(report_collection))
 
 # now we are required to tell Python
 # for 'Main' function existence
@@ -387,6 +396,19 @@ if __name__ == '__main__':
     # open image
     
     rows = x+1+4
+    cond_options = ["Bermasalah", "Baik"]
+    sticker_options = ["Ya", "Tidak"]
+    
+    clicked_cond = StringVar()
+    clicked_cond.set( "Select" )
+    condition_drop = OptionMenu( root , clicked_cond , *cond_options ).grid(column = 1, row = rows)
+    rows+=1
+    
+    clicked_bribox = StringVar()
+    clicked_bribox.set( "Select" )
+    bribox_drop = OptionMenu( root , clicked_bribox , *sticker_options ).grid(column = 1, row = rows)
+    rows+=1
+    
     # for item in image_dict_list:
     #     attachment_label = Label(root, text=f'Attachment {item} : ')
     #     attachment_label.grid(column = 0, row = rows, sticky='w', pady=20)
@@ -397,7 +419,6 @@ if __name__ == '__main__':
     #         text='Open Attachment Image',
     #         command=saveImagePath
     #     ).grid(column = 1, row = rows, sticky='nesw', pady=20)
-    #     rows+=1
 
     start_button = ttk.Button(
         root,
