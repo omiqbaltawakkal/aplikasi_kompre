@@ -64,7 +64,7 @@ def callPowershellFunc(cmd):
 
 
 def getDevicesBrand(collection_key):
-    print("Getting Devices Brand Information..")
+    # # print("Getting Devices Brand Information..")
     brand_name = callPowershellFunc(
         "(Get-WmiObject -Class:Win32_ComputerSystem).Name")
     brand_model = callPowershellFunc(
@@ -73,11 +73,11 @@ def getDevicesBrand(collection_key):
         collection_key: returnValueParser(
             brand_name) + " " + returnValueParser(brand_model)
     })
-    print("Success Getting Devices Brand Information..")
+    # # print("Success Getting Devices Brand Information..")
 
 
 def getOSValues(collection_key):
-    print("Getting Operating System Information..")
+    # # print("Getting Operating System Information..")
     # Microsoft Windows 10 Home Single Language|C:\Windows|\Device\Harddisk0\Partition3
     os_name = callPowershellFunc("(Get-WMIObject win32_operatingsystem).name")
     os_version = callPowershellFunc(
@@ -88,24 +88,24 @@ def getOSValues(collection_key):
         collection_key: returnValueParser(os_name).split(
             "|")[0] + " " + returnValueParser(os_version) + " " + returnValueParser(os_architecture)
     })
-    print("Success Getting Operating System Information..")
+    # # print("Success Getting Operating System Information..")
 
 
 def getProcessorCapacity(collection_key):
-    print("Getting Processor Information..")
+    # print("Getting Processor Information..")
     processor_name = callPowershellFunc("(Get-WmiObject Win32_Processor).Name")
     processor_average_utilization = callPowershellFunc(
         "(Get-WmiObject -Class win32_processor -ErrorAction Stop | Measure-Object -Property LoadPercentage -Average | Select-Object Average).Average")
     report_collection.update({
-        collection_key: returnValueParser(processor_name) + ' / ' + returnValueParser(processor_average_utilization) + "%"
+        collection_key: returnValueParser(processor_name) + ' / ' + returnValueParser(processor_average_utilization) + " %"
     })
-    print("Success Getting Processor Information..")
+    # print("Success Getting Processor Information..")
 
 
 def getMemoryCapacity(collection_key):
-    print("Getting Memory Information..")
+    # print("Getting Memory Information..")
     memory_capacity = callPowershellFunc(
-        "(Get-WmiObject Win32_PhysicalMemory | Measure-Object -Property capacity -Sum).sum / 1mb")
+        "(Get-WmiObject Win32_PhysicalMemory | Measure-Object -Property capacity -Sum).sum / 1gb")
 
     total_visible_memory_size = callPowershellFunc(
         "(Get-WmiObject -Class WIN32_OperatingSystem).TotalVisibleMemorySize")
@@ -118,15 +118,15 @@ def getMemoryCapacity(collection_key):
     utilization_value = (total_visible_memory_size -
                          free_physical_memory_size)*100 / total_visible_memory_size
     report_collection.update({
-        collection_key: returnValueParser(memory_capacity) + " MB / "+ str(int(utilization_value)) + "%"
+        collection_key: returnValueParser(memory_capacity) + " GB / "+ str(int(utilization_value)) + " %"
     })
-    print("Success Getting Memory Information..")
+    # print("Success Getting Memory Information..")
 
 
 def getDiskCapacity(collection_key):
-    print("Getting Storage Disk Information..")
+    # print("Getting Storage Disk Information..")
     storage_capacity = callPowershellFunc(
-        "Get-WmiObject win32_logicaldisk | Format-Table DeviceId, DriveType, @{n=\"Size\";e={[math]::Round($_.Size/1GB,2)}},@{n=\"FreeSpace\";e={[math]::Round($_.FreeSpace/1GB,2)}}")
+        "Get-WmiObject win32_logicaldisk | Format-Table @{label=\"Nama\";e={$_.DeviceId} }, @{n=\"Size\";e={\'{0}GB\' -f [math]::Round($_.Size/1GB,2)}},@{n=\"FreeSpace\";e={\'{0}GB\' -f [math]::Round($_.FreeSpace/1GB,2)}}")
     storage_capacity = list(
         filter(None, storage_capacity.decode("utf-8").strip().split("\r\n")))
     del storage_capacity[1]  # delete ---- ----- ---- ----
@@ -134,7 +134,7 @@ def getDiskCapacity(collection_key):
     item_dict_keys = storage_capacity[0].split()
     del storage_capacity[0]  # delete header
     storage_list = list()
-    increment_size = 6
+    increment_size = 5
     for x in range(0, len(storage_capacity)):
         item_dict = dict()
         storage_item = list(filter(None, storage_capacity[x].split()))
@@ -144,11 +144,11 @@ def getDiskCapacity(collection_key):
     report_collection.update({
         collection_key: storage_list
     })
-    print("Success Getting Storage Disk Information..")
+    # print("Success Getting Storage Disk Information..")
 
 
 def getAntivirusProduct(collection_key):
-    print("Getting Antiviruses Information..")
+    # print("Getting Antiviruses Information..")
     list_of_antiviruses = callPowershellFunc(
         "Get-WmiObject -Namespace root/SecurityCenter2 -ClassName AntivirusProduct | Select-Object -Property display*, time*, productStat* | ft -HideTableHeaders")
     list_of_antiviruses = list_of_antiviruses.decode(
@@ -164,17 +164,17 @@ def getAntivirusProduct(collection_key):
     report_collection.update({
         collection_key: list_antivirus_info
     })
-    print("Success Getting Antiviruses Information..")
+    # print("Success Getting Antiviruses Information..")
 
 
 def getRemoteDesktopPortStatus(collection_key):
-    print("Getting Remote Desktop Information..")
+    # print("Getting Remote Desktop Information..")
     remote_desktop_port_status = callPowershellFunc(
-        "if ((Get-ItemProperty \"hklm:\System\CurrentControlSet\Control\Terminal Server\").fDenyTSConnections -eq 0) { write-host \"Remote Desktop Port is Enabled\" } else { write-host \"Remote Desktop Port is disabled\" }")
+        "if ((Get-ItemProperty \"hklm:\System\CurrentControlSet\Control\Terminal Server\").fDenyTSConnections -eq 0) { write-host \"Ya\" } else { write-host \"Tidak\" }")
     report_collection.update({
         collection_key: returnValueParser(remote_desktop_port_status)
     })
-    print("Success Getting Remote Desktop Information..")
+    # print("Success Getting Remote Desktop Information..")
 
 
 def getLANIPAddress(collection_key):
@@ -184,9 +184,8 @@ def getLANIPAddress(collection_key):
     #Get-WmiObject Win32_NetworkAdapterConfiguration -Filter "DHCPEnabled=$True" | Where-Object {$_.IPEnabled -AND $_.IPAddress -gt 0} |Select-object IPAddress, MACAddress
     if result:
         result = result.decode("utf-8").strip().split("\r\n")
-        result = [each.split(" ") for each in result]
         report_collection.update(
-            {collection_key: result})
+            {collection_key: result[0].split()[0] + " / "+ result[0].split()[1]})
     else:
         report_collection.update({collection_key: "IP Not Found"})
     # Label(second_frame, text= "Success Getting IP Address..").pack() 
@@ -208,11 +207,11 @@ def getNetworkTimeProtocol(collection_key):
             ntp_status = ntp_status + " at " + " : " .join(item_split[1:]).strip()
     report_collection.update(
         {collection_key: ntp_status})
-    print("Success Getting Network Time Protocol..")
+    # print("Success Getting Network Time Protocol..")
 
 
 def getScreenSaverStatus(collection_key):
-    print("Getting Screen Saver Status..")
+    # print("Getting Screen Saver Status..")
     screen_saver_lists = callPowershellFunc(
         "Get-WmiObject -Class Win32_Desktop")
     screen_saver_lists = list(
@@ -228,7 +227,7 @@ def getScreenSaverStatus(collection_key):
             screen_saver.append(item_dict)
     report_collection.update(
         {collection_key: screen_saver})
-    print("Success Getting Screen Saver Status..")
+    # print("Success Getting Screen Saver Status..")
     
 def getUsbHardeningStatus(collection_key):
     hardening_status = callPowershellFunc("Get-ItemPropertyValue \"HKLM:\\SYSTEM\\CurrentControlSet\\services\\USBSTOR\" -Name \"Start\"")
@@ -236,6 +235,10 @@ def getUsbHardeningStatus(collection_key):
         report_collection.update({collection_key : "Ya"})
     else: 
         report_collection.update({collection_key : "Tidak"})
+        
+def getEnvironmentName(collection_key):
+    environment_name = callPowershellFunc("$env:computername")
+    report_collection.update({collection_key : environment_name.decode("utf-8").strip()})
 
 
 def saveImagePath():
@@ -254,36 +257,36 @@ def upload_file(collection_key, image_file_path):
 
 
 def sendDataToHost(socketObject, message):
-    print("Start Sending to Receiver..")
+    # print("Start Sending to Receiver..")
     bytess = str.encode(message)
-    print(len(bytess))
     socketObject.sendall(bytess)
 
     while(True):
         data = socketObject.recv(1024)
-        print(data)
+        # print(data)
         print("Connection closed")
         break
 
     socketObject.close()
 
 def reportDataListFunction():
-    recordUpdate(report_collection, "nama", worker_name_entry.get())
     recordUpdate(report_collection, "tanggal",  str(datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
+    recordUpdate(report_collection, "nama", worker_name_entry.get())
     recordUpdate(report_collection, "pn", personal_number_entry.get())
     recordUpdate(report_collection, "jabatan", worker_role_entry.get())
     recordUpdate(report_collection, "kode_uker",
                 worker_branch_code_entry.get())
     recordUpdate(report_collection, "kondisi", clicked_cond.get())
     recordUpdate(report_collection, "bribox", clicked_bribox.get())
-    getLANIPAddress("ip_address")    
-    getDevicesBrand("nama_pc")
+    getDevicesBrand("merk")
+    getEnvironmentName("nama_pc")
     getOSValues("os")
     getProcessorCapacity("processor_details")
     getMemoryCapacity("ram")
     getRemoteDesktopPortStatus("rdp")
     getUsbHardeningStatus("hardening")
     getNetworkTimeProtocol("ntp")
+    getLANIPAddress("ip_address")    
     getDiskCapacity("disk")
     getAntivirusProduct("antivirus")
     getScreenSaverStatus("screensaver")

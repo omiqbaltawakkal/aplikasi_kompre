@@ -15,6 +15,7 @@ from threading import Thread
 import traceback
 from time import sleep, time
 import pandas as pd
+import re
 
 
 break_condition = True
@@ -103,21 +104,38 @@ class GUI():
                 strings = ''
                 for item in value:
                     if type(item)== list:
-                        strings +=','.join(item)
-                        strings += "\n"
+                        strings +=', '.join(item)
+                        strings += "\r\n"
                         value = strings
                     elif type(item) == dict:
-                        strings +="\r\n".join(':'.join((key,val)) for (key,val) in item.items())
-                        strings += "\n\n"
+                        strings +="\r\n".join(': '.join((key,val)) for (key,val) in item.items())
+                        strings += "\r\n"
                         value = strings
                 else:
-                    pass
+                    if key.__contains__('processor'):
+                        splits = value.strip().split("/")
+                        number = re.findall(r'[A-Za-z]+|\d+(?:\.\d+)?', splits[0].split("@")[1])
+                        strings += "Frekuensi: "+ " ".join(number)+ "\n"
+                        strings += "Utilisasi: "+ splits[1] + "\n"
+                        strings +="\n"
+                        value = strings
+                    if key.__contains__("ram"):
+                        splits = value.split("/")
+                        strings += "Total: "+ splits[0] + "\n"
+                        strings += "Utilisasi: "+ splits[1] +"\n"
+                        strings +="\n"
+                        value = strings
+                    if key.__contains__("address"):
+                        splits = value.split("/")
+                        value = splits[0]
+                    else:
+                        pass
                 temp.update({key.replace("_"," ").title(): value})
             list_temp.append(temp)
         data = list_temp
         
         df = pd.DataFrame(data=data)
-        writer = pd.ExcelWriter('kkpa.xlsx', engine='xlsxwriter')
+        writer = pd.ExcelWriter('KKPA Unit Kerja/Divisi ' + kode_uker + '.xlsx', engine='xlsxwriter')
         df.to_excel(writer, index=False, startrow=2, sheet_name='Sheet1')
         worksheet = writer.sheets['Sheet1']
         worksheet.write('A1', "Unit Kerja : " + kode_uker)
@@ -179,10 +197,11 @@ class GUI():
                 doc.add_run(
                     key.replace("_", " ").title()).bold = True
                 doc.add_run(" : {} ".format(value))
-        document.save("kkpa " + owner_name + ".docx")
+        document.save("KKPA " + owner_name + ".docx")
 
     def socket_thread(self):
         self.addToTextbox("thread started..")
+        self.excel_collection_value.clear()
         self.server_ip = str(self.ip_port_entry.get().split(":")[0])
         self.server_port = int(self.ip_port_entry.get().split(":")[1])
         self.max_number = int(self.max_number_entry.get())
@@ -203,7 +222,7 @@ class GUI():
             
             # try:
             while True:
-                self.rc = self.conn.recv(40960)
+                self.rc = self.conn.recv(409600)
                 if self.rc != b'':
                     self.raw_data = self.rc.decode().replace("\'", "\"")
                     self.dic_data = json.loads(self.raw_data)
