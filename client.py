@@ -19,7 +19,7 @@
 # Get-WmiObject -List
 
 import subprocess
-from tkinter import *
+import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog as fd
 from tkinter.messagebox import showinfo
@@ -30,6 +30,7 @@ import base64
 from pathlib import Path
 import asyncio
 from datetime import datetime
+import threading
 
 
 window_width = 200
@@ -90,20 +91,18 @@ def getOSValues(collection_key):
     print("Success Getting Operating System Information..")
 
 
-def getProcessorCapacity(collection_key, collection_key_2):
+def getProcessorCapacity(collection_key):
     print("Getting Processor Information..")
     processor_name = callPowershellFunc("(Get-WmiObject Win32_Processor).Name")
     processor_average_utilization = callPowershellFunc(
         "(Get-WmiObject -Class win32_processor -ErrorAction Stop | Measure-Object -Property LoadPercentage -Average | Select-Object Average).Average")
     report_collection.update({
-        collection_key: returnValueParser(processor_name),
-        collection_key_2: returnValueParser(
-            processor_average_utilization) + "%"
+        collection_key: returnValueParser(processor_name) + ' / ' + returnValueParser(processor_average_utilization) + "%"
     })
     print("Success Getting Processor Information..")
 
 
-def getMemoryCapacity(collection_key, collection_key_2):
+def getMemoryCapacity(collection_key):
     print("Getting Memory Information..")
     memory_capacity = callPowershellFunc(
         "(Get-WmiObject Win32_PhysicalMemory | Measure-Object -Property capacity -Sum).sum / 1mb")
@@ -119,8 +118,7 @@ def getMemoryCapacity(collection_key, collection_key_2):
     utilization_value = (total_visible_memory_size -
                          free_physical_memory_size)*100 / total_visible_memory_size
     report_collection.update({
-        collection_key: returnValueParser(memory_capacity) + " MB",
-        collection_key_2: str(int(utilization_value)) + "%"
+        collection_key: returnValueParser(memory_capacity) + " MB / "+ str(int(utilization_value)) + "%"
     })
     print("Success Getting Memory Information..")
 
@@ -185,8 +183,10 @@ def getLANIPAddress(collection_key):
         "Get-WmiObject win32_networkadapterconfiguration | Select-Object -Property @{Name = 'IPAddress' ; Expression = {($PSItem.IPAddress[0])}}, MacAddress | Where IPAddress -NE $null | ft -HideTableHeaders")
     #Get-WmiObject Win32_NetworkAdapterConfiguration -Filter "DHCPEnabled=$True" | Where-Object {$_.IPEnabled -AND $_.IPAddress -gt 0} |Select-object IPAddress, MACAddress
     if result:
+        result = result.decode("utf-8").strip().split("\r\n")
+        result = [each.split(" ") for each in result]
         report_collection.update(
-            {collection_key: result.decode("utf-8").strip().split(" ")})
+            {collection_key: result})
     else:
         report_collection.update({collection_key: "IP Not Found"})
     # Label(second_frame, text= "Success Getting IP Address..").pack() 
@@ -224,7 +224,8 @@ def getScreenSaverStatus(collection_key):
         for item in screen_saver_lists[x:x+increment_size]:
             item_split = item.split(":")
             item_dict.update({item_split[0].strip(): item_split[1].strip()})
-        screen_saver.append(item_dict)
+        if (item_dict.get("ScreenSaverActive") == 'True'):
+            screen_saver.append(item_dict)
     report_collection.update(
         {collection_key: screen_saver})
     print("Success Getting Screen Saver Status..")
@@ -232,9 +233,9 @@ def getScreenSaverStatus(collection_key):
 def getUsbHardeningStatus(collection_key):
     hardening_status = callPowershellFunc("Get-ItemPropertyValue \"HKLM:\\SYSTEM\\CurrentControlSet\\services\\USBSTOR\" -Name \"Start\"")
     if int(hardening_status) == 3:
-        report_collection.update({collection_key : "Enabled"})
+        report_collection.update({collection_key : "Ya"})
     else: 
-        report_collection.update({collection_key : "Disabled"})
+        report_collection.update({collection_key : "Tidak"})
 
 
 def saveImagePath():
@@ -266,51 +267,52 @@ def sendDataToHost(socketObject, message):
 
     socketObject.close()
 
-def powershellListFunction():
-    getLANIPAddress("ip_address")    
-    getDevicesBrand("computer_name")
-    getOSValues("os_values")
-    getProcessorCapacity("processor_capacity", "processor_utilization")
-    getMemoryCapacity("memory_capacity", "memory_utilization")
-    getRemoteDesktopPortStatus("remote_desktop_status")
-    getNetworkTimeProtocol("network_time_protocol_Status")
-    getDiskCapacity("list_of_storage_information")
-    getAntivirusProduct("list_of_antiviruses")
-    getScreenSaverStatus("list_of_screen_saver_status")
-
-
-def getPersonalInformation():
-    server_ip = str(ip_entry.get().split(":")[0])
-    server_port = int(ip_entry.get().split(":")[1])
-    # Label(second_frame, text='Start Gather').pack()
-    # if not report_collection:
-    recordUpdate(report_collection, "nama_pekerja", worker_name_entry.get())
+def reportDataListFunction():
+    recordUpdate(report_collection, "nama", worker_name_entry.get())
     recordUpdate(report_collection, "tanggal",  str(datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
-    recordUpdate(report_collection, "pN_pekerja", personal_number_entry.get())
-    recordUpdate(report_collection, "jabatan_pekerja", worker_role_entry.get())
+    recordUpdate(report_collection, "pn", personal_number_entry.get())
+    recordUpdate(report_collection, "jabatan", worker_role_entry.get())
     recordUpdate(report_collection, "kode_uker",
                 worker_branch_code_entry.get())
-    recordUpdate(report_collection, "condition", clicked_cond.get())
-    recordUpdate(report_collection, "bribox_sticker", clicked_bribox.get())
-    powershellListFunction()
-    # for x in range(len(image_filepath_list)):
-    #     collection_name = (
-    #         "image_" + "_".join(image_dict_list[x].split(" "))).lower()
-    #     upload_file(collection_name, image_filepath_list[x])
-
+    recordUpdate(report_collection, "kondisi", clicked_cond.get())
+    recordUpdate(report_collection, "bribox", clicked_bribox.get())
+    getLANIPAddress("ip_address")    
+    getDevicesBrand("nama_pc")
+    getOSValues("os")
+    getProcessorCapacity("processor_details")
+    getMemoryCapacity("ram")
+    getRemoteDesktopPortStatus("rdp")
+    getNetworkTimeProtocol("ntp")
+    getDiskCapacity("disk")
+    getAntivirusProduct("antivirus")
+    getScreenSaverStatus("screensaver")
+    getUsbHardeningStatus("hardenning")
+    
     with open('readme '+worker_name_entry.get()+'.txt', 'w') as f:
         f.write(str(report_collection))
         f.close()
+
+
+def getStartProcedures():
+    server_ip = str(ip_entry.get().split(":")[0])
+    server_port = int(ip_entry.get().split(":")[1])
+    
+    # threads = threading.Thread(target=).start()
+    reportDataListFunction()
     socketObject = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     socketObject.connect((server_ip, server_port))
     # # Label(second_frame, text='Connected to designated IP for sending..').pack()
-    # sendDataToHost(socketObject, str(report_collection))
+    sendDataToHost(socketObject, str(report_collection))
+    message_box = tk.messagebox.showinfo("Info", "Selesai...")
+    root.destroy()
+
+    
 
 # now we are required to tell Python
 # for 'Main' function existence
 if __name__ == '__main__':
 
-    root = Tk()
+    root = tk.Tk()
     root.title(string='LHPK')
     
     # get the screen dimension
@@ -344,51 +346,51 @@ if __name__ == '__main__':
 
     x =0
     
-    ip_label = Label(root, text='IP/Port Receiver     :')
+    ip_label = tk.Label(root, text='IP/Port Receiver     :')
     # name_label.pack(side = LEFT, fill=X, expand=True)
     ip_label.grid(column = 0, row = x,sticky = 'w', pady=20)
     
 
-    ip_str_var = StringVar()
-    ip_entry = Entry(root, textvariable=ip_str_var)
+    ip_str_var = tk.StringVar()
+    ip_entry = tk.Entry(root, textvariable=ip_str_var)
     # worker_name_entry.pack(side = RIGHT, fill=X, expand=True)
     ip_entry.grid(column = 1, row = x,sticky='nesw', pady=20)
     ip_entry.focus()
     ########### 
 
-    name_label = Label(root, text='Nama Pekerja     :')
+    name_label = tk.Label(root, text='Nama Pekerja     :')
     # name_label.pack(side = LEFT, fill=X, expand=True)
     name_label.grid(column = 0, row = x+1+0,sticky = 'w', pady=20)
 
-    worker_name = StringVar()
-    worker_name_entry = Entry(root, textvariable=worker_name)
+    worker_name = tk.StringVar()
+    worker_name_entry = tk.Entry(root, textvariable=worker_name)
     # worker_name_entry.pack(side = RIGHT, fill=X, expand=True)
     worker_name_entry.grid(column = 1, row = x+1+0,sticky='nesw', pady=20)
 
-    personal_number_label = Label(root, text='PN Pekerja        :')
+    personal_number_label = tk.Label(root, text='PN Pekerja        :')
     personal_number_label.grid(column = 0, row = x+1+1,sticky = 'w', pady=20)
     # personal_number_label.pack(side = LEFT,fill=X, expand=True)
 
-    personal_number = IntVar()
-    personal_number_entry = Entry(root, textvariable=personal_number)
+    personal_number = tk.IntVar()
+    personal_number_entry = tk.Entry(root, textvariable=personal_number)
     personal_number_entry.grid(column = 1, row = x+1+1, sticky='nesw', pady=20)
     # personal_number_entry.pack(side = RIGHT,fill=X, expand=True)
 
-    worker_role_label = Label(root, text='Jabatan           :')
+    worker_role_label = tk.Label(root, text='Jabatan           :')
     worker_role_label.grid(column = 0, row = x+1+2,sticky = 'w', pady=20)
     # worker_role_label.pack(side = LEFT,fill=X, expand=True)
 
-    worker_role = StringVar()
-    worker_role_entry = Entry(root, textvariable=worker_role)
+    worker_role = tk.StringVar()
+    worker_role_entry = tk.Entry(root, textvariable=worker_role)
     worker_role_entry.grid(column = 1, row = x+1+2,sticky='nesw', pady=20)
     # worker_role_entry.pack(side = RIGHT,fill=X, expand=True)
 
-    worker_branch_code_label = Label(root, text='Kode Uker          :')
+    worker_branch_code_label = tk.Label(root, text='Kode Uker          :')
     worker_branch_code_label.grid(column = 0, row = x+1+3,sticky = 'w', pady=20)
     # worker_branch_code_label.pack(side = LEFT,fill=X, expand=True)
 
-    worker_branch_code = IntVar()
-    worker_branch_code_entry = Entry(
+    worker_branch_code = tk.IntVar()
+    worker_branch_code_entry = tk.Entry(
         root, textvariable=worker_branch_code)
     worker_branch_code_entry.grid(column = 1, row = x+1+3,sticky='nesw', pady=20)
     # worker_branch_code_entry.pack(side = RIGHT,fill=X, expand=True)
@@ -396,17 +398,23 @@ if __name__ == '__main__':
     # open image
     
     rows = x+1+4
-    cond_options = ["Bermasalah", "Baik"]
-    sticker_options = ["Ya", "Tidak"]
+    condition_label = tk.Label(root, text='Kondisi          :')
+    condition_label.grid(column = 0, row = rows,sticky = 'w', pady=20)
     
-    clicked_cond = StringVar()
+    cond_options = ["Bermasalah", "Baik"]
+    clicked_cond = tk.StringVar()
     clicked_cond.set( "Select" )
-    condition_drop = OptionMenu( root , clicked_cond , *cond_options ).grid(column = 1, row = rows)
+    condition_drop = tk.OptionMenu( root , clicked_cond , *cond_options ).grid(column = 1, row = rows)
     rows+=1
     
-    clicked_bribox = StringVar()
+    
+    sticker_label = tk.Label(root, text='Ada Sticker Bribox          :')
+    sticker_label.grid(column = 0, row = rows,sticky = 'w', pady=20)
+    
+    sticker_options = ["Ya", "Tidak"]
+    clicked_bribox = tk.StringVar()
     clicked_bribox.set( "Select" )
-    bribox_drop = OptionMenu( root , clicked_bribox , *sticker_options ).grid(column = 1, row = rows)
+    bribox_drop = tk.OptionMenu( root , clicked_bribox , *sticker_options ).grid(column = 1, row = rows)
     rows+=1
     
     # for item in image_dict_list:
@@ -423,7 +431,7 @@ if __name__ == '__main__':
     start_button = ttk.Button(
         root,
         text="Submit",
-        command=getPersonalInformation,
+        command=getStartProcedures,
     ).grid(column = 2, row = rows,sticky='nesw', pady=20)
     # start_button.pack(
     #     ipadx=5,

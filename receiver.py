@@ -13,8 +13,8 @@ from tkinter import ttk
 import tkinter.scrolledtext as scrolledtext
 from threading import Thread
 import traceback
-
 from time import sleep, time
+import pandas as pd
 
 
 break_condition = True
@@ -37,6 +37,8 @@ class GUI():
 
         self.collection_data_value_only = list()
         self.header_list = list()
+        
+        self.excel_collection_value = list()
 
         self.screen_width = root.winfo_screenwidth()
         self.screen_height = root.winfo_screenheight()
@@ -68,8 +70,8 @@ class GUI():
         self.startb = Button(self.frame, text="Start", command=self.startc)
         self.startb.pack(side=LEFT, anchor=N)
 
-        # self.stopb = Button(self.frame, text="Stop", command=self.stopc)
-        # self.stopb.pack(side=LEFT, anchor=N)
+        self.generate = Button(self.frame, text="Generate", command=self.generateKKPAExcel)
+        self.generate.pack(side=LEFT, anchor=N)
 
         # self.connectionl = Label(self.frame, text="Not Started")
         # self.connectionl.pack(side=LEFT, anchor=SW)
@@ -83,23 +85,41 @@ class GUI():
         self.textboxes.config(state=DISABLED)
         
     def generateKKPAExcel(self):
-        workbook = xlsxwriter.Workbook('kkpa.xlsx')
-        worksheet = workbook.add_worksheet()
-
-        for x in range(len(header_list)):
-            worksheet.write(0, x, str(header_list[x]))
-
-        for x in range(len(collection_data_value_only)):
-            for y in range(len(collection_data_value_only[0])):
-                worksheet.write(1+x, y, str(collection_data_value_only[x][y]))
-
-        workbook.close()
+        data = None
+        if (self.excel_collection_value):
+            data = self.excel_collection_value
+        else: 
+            f = open('readme_self.excel_collection_value.txt', 'r')
+            data = f.read()
+            data = json.loads(data.replace("\'", "\""))
+        list_temp = list()
+        for each in data :
+            temp = dict()
+            for key, value in each.items():
+                strings = ''
+                for item in value:
+                    if type(item)== list:
+                        strings +=','.join(item)
+                        strings += "\n"
+                        value = strings
+                    elif type(item) == dict:
+                        strings +="\r\n".join(':'.join((key,val)) for (key,val) in item.items())
+                        strings += "\n\n"
+                        value = strings
+                else:
+                    pass
+                temp.update({key.replace("_"," ").title(): value})
+            list_temp.append(temp)
+        data = list_temp
+        
+        df = pd.DataFrame(data=data)
+        df.to_excel('kkpa.xlsx', index=False, startrow=2)
 
     def generateKKPAFromRawData(self, client_raw_data):
         self.addToTextbox("generate KKPA start ...")
         dict_raw_data = client_raw_data
         document = Document()
-        owner_name = dict_raw_data.get('nama_pekerja')
+        owner_name = dict_raw_data.get('nama')
         # Header
         heading_style = document.styles['Body Text']
         head = document.add_paragraph(style=heading_style).add_run(
@@ -113,7 +133,7 @@ class GUI():
             if type(value) == list:
                 document.add_heading("{}".format(
                     key.replace("_", " ").title()), 1)
-                if str(key).__contains__("storage"):
+                if str(key).__contains__("disk"):
                     for item in value:
                         document.add_paragraph(" Disk {} Total / Free Space : {} GB / {} GB ".format(
                             item.get('DeviceId'), item.get('Size'), item.get('FreeSpace')), style='List Number')
@@ -124,12 +144,12 @@ class GUI():
                 elif str(key).__contains__("saver"):
                     for item in value:
                         if item.get('ScreenSaverTimeout'):
-                            document.add_paragraph("Desktop Account Name of {}, have screen save with timeout {} seconds".format(
+                            document.add_paragraph("Desktop Account Name of {}, have screensaver with timeout {} seconds".format(
                                 item.get('Name'), item.get('ScreenSaverTimeout')), style='List Number')
                 elif str(key).__contains__("ip_addre"):
                     for item in value:
                         document.add_paragraph(
-                            "{} ".format(item), style='List Number')
+                            "{} ({}) ".format(item[0], item[1]), style='List Number')
                 else:
                     for item in value:
                         document.add_paragraph("", style='List Number')
@@ -175,14 +195,12 @@ class GUI():
             
             # try:
             while True:
-                self.rc = self.conn.recv(4096000000)
+                self.rc = self.conn.recv(40960)
                 if self.rc != b'':
                     self.raw_data = self.rc.decode().replace("\'", "\"")
                     self.dic_data = json.loads(self.raw_data)
                     self.generateKKPAFromRawData(self.dic_data)
-                    if not self.header_list:
-                        self.header_list = list(self.dic_data.keys())
-                    self.collection_data_value_only.append(list(self.dic_data.values())) 
+                    self.excel_collection_value.append(self.dic_data)
                     self.conn.sendall(str.encode("Received !!"))
                     self.addToTextbox("Received!")
                     self.textboxes.see(END)
@@ -191,16 +209,13 @@ class GUI():
             if self.count == self.max_number:
                 self.running = 0
                 break
-        if self.collection_data_value_only:
-            with open('readme_client_values.txt', 'w') as f:
-                f.write(str(self.collection_data_value_only))
-                f.close()
-        if self.header_list:
-            with open('readme_client_header.txt', 'w') as f:
-                f.write(str(self.header_list))
+        if self.excel_collection_value:
+            with open('readme_self.excel_collection_value.txt', 'w') as f:
+                f.write(str(self.excel_collection_value))
                 f.close()
         self.addToTextbox("Ended!")
         self.textboxes.see(END)
+        self.generateKKPAExcel()
         self.serverSocket.close()
 
     def startc(self):
