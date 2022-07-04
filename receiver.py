@@ -92,6 +92,10 @@ class GUI():
             f = open('readme_self.excel_collection_value.txt', 'r')
             data = f.read()
             data = json.loads(data.replace("\'", "\""))
+            
+        #asumsi end process = 1 uker -> data[0].get("kode_uker") == data[N].get("kode_uker")
+        kode_uker = data[0].get("kode_uker")
+        
         list_temp = list()
         for each in data :
             temp = dict()
@@ -113,7 +117,11 @@ class GUI():
         data = list_temp
         
         df = pd.DataFrame(data=data)
-        df.to_excel('kkpa.xlsx', index=False, startrow=2)
+        writer = pd.ExcelWriter('kkpa.xlsx', engine='xlsxwriter')
+        df.to_excel(writer, index=False, startrow=2, sheet_name='Sheet1')
+        worksheet = writer.sheets['Sheet1']
+        worksheet.write('A1', "Unit Kerja : " + kode_uker)
+        writer.save()
 
     def generateKKPAFromRawData(self, client_raw_data):
         self.addToTextbox("generate KKPA start ...")

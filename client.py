@@ -282,11 +282,11 @@ def reportDataListFunction():
     getProcessorCapacity("processor_details")
     getMemoryCapacity("ram")
     getRemoteDesktopPortStatus("rdp")
+    getUsbHardeningStatus("hardening")
     getNetworkTimeProtocol("ntp")
     getDiskCapacity("disk")
     getAntivirusProduct("antivirus")
     getScreenSaverStatus("screensaver")
-    getUsbHardeningStatus("hardenning")
     
     with open('readme '+worker_name_entry.get()+'.txt', 'w') as f:
         f.write(str(report_collection))
@@ -306,7 +306,6 @@ def getStartProcedures():
     message_box = tk.messagebox.showinfo("Info", "Selesai...")
     root.destroy()
 
-    
 
 # now we are required to tell Python
 # for 'Main' function existence
