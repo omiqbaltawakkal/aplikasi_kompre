@@ -102,14 +102,19 @@ class GUI():
             temp = dict()
             for key, value in each.items():
                 strings = ''
-                for item in value:
-                    if type(item)== list:
-                        strings +=', '.join(item)
-                        strings += "\r\n"
-                        value = strings
-                    elif type(item) == dict:
-                        strings +="\r\n".join(': '.join((key,val)) for (key,val) in item.items())
-                        strings += "\r\n"
+                if type(value) == list:
+                    if key.__contains__("appli"):
+                        value = ', '.join(value)
+                    else:
+                        repl = r'\1'
+                        if key.__contains__("disk"):
+                            repl = r'\1 '
+                        for item in value:
+                            for keys, values in item.items():
+                                values = re.sub('(\d+(\.\d+)?)', repl, values)
+                                item.update({keys: values.strip()})
+                            strings +='\n'.join(': '.join((key,val)) for (key,val) in item.items())
+                            strings += "\n\n"
                         value = strings
                 else:
                     if key.__contains__('processor'):
@@ -117,25 +122,28 @@ class GUI():
                         number = re.findall(r'[A-Za-z]+|\d+(?:\.\d+)?', splits[0].split("@")[1])
                         strings += "Frekuensi: "+ " ".join(number)+ "\n"
                         strings += "Utilisasi: "+ splits[1] + "\n"
-                        strings +="\n"
+                        strings +="\n\n"
                         value = strings
-                    if key.__contains__("ram"):
+                    elif key.__contains__("ram"):
                         splits = value.split("/")
                         strings += "Total: "+ splits[0] + "\n"
                         strings += "Utilisasi: "+ splits[1] +"\n"
-                        strings +="\n"
+                        strings +="\n\n"
                         value = strings
-                    if key.__contains__("address"):
+                    elif key.__contains__("address"):
                         splits = value.split("/")
                         value = splits[0]
+                    elif key.__contains__("saver"):
+                        value = value.get("Status")
                     else:
                         pass
-                temp.update({key.replace("_"," ").title(): value})
+                temp.update({key.replace("_"," ").upper(): value})
             list_temp.append(temp)
         data = list_temp
         
         df = pd.DataFrame(data=data)
-        writer = pd.ExcelWriter('KKPA Unit Kerja/Divisi ' + kode_uker + '.xlsx', engine='xlsxwriter')
+        # writer = pd.ExcelWriter('kkpa.xlsx', engine='xlsxwriter')
+        writer = pd.ExcelWriter('KKPA.xlsx', engine='xlsxwriter')
         df.to_excel(writer, index=False, startrow=2, sheet_name='Sheet1')
         worksheet = writer.sheets['Sheet1']
         worksheet.write('A1', "Unit Kerja : " + kode_uker)
@@ -154,28 +162,46 @@ class GUI():
         head.font.size = Pt(20)
         head.font.bold = True
         image_width = Cm(10)
-
+        
+        exception_list = ["tanggal", "nama", "pn", "jabatan", "kode_uker"]
+        #Template docx
+        # informasi umum
+        document.add_heading("Infomasi Umum", 1)
+        for key, value in dict_raw_data.items():
+            if str(key) in exception_list:
+                doc = document.add_paragraph("")
+                doc.add_run(
+                    key.replace("_", " ").upper()).bold = True
+                doc.add_run(" : {} ".format(value))
+        p = doc.add_run()
+        p.add_break()
+        #spesifikasi 
+        document.add_heading("Spesifikasi",1)
         for key, value in dict_raw_data.items():
             if type(value) == list:
-                document.add_heading("{}".format(
-                    key.replace("_", " ").title()), 1)
+                p = document.add_paragraph()
+                p.add_run("{}".format(
+                    key.replace("_", " ").upper())).bold = True
                 if str(key).__contains__("disk"):
                     for item in value:
-                        document.add_paragraph(" Disk {} Total / Free Space : {} GB / {} GB ".format(
-                            item.get('DeviceId'), item.get('Size'), item.get('FreeSpace')), style='List Number')
+                        document.add_paragraph(" Disk \"{}\" Total / Free Space : {} / {} ".format(
+                            item.get('Name'), item.get('Size'), item.get('Free Space')), style='List Number')
                 elif str(key).__contains__("antivirus"):
                     for item in value:
                         document.add_paragraph("{}, updated on {}".format(
-                            item.get('AntivirusName'), item.get('LastUpdate')), style='List Number')
-                elif str(key).__contains__("saver"):
-                    for item in value:
-                        if item.get('ScreenSaverTimeout'):
-                            document.add_paragraph("Desktop Account Name of {}, have screensaver with timeout {} seconds".format(
-                                item.get('Name'), item.get('ScreenSaverTimeout')), style='List Number')
+                            item.get('Name'), item.get('Last Update')), style='List Number')
+                # elif str(key).__contains__("saver"):
+                #     for item in value:
+                #         if item.get('ScreenSaverTimeout'):
+                #             document.add_paragraph("Desktop Account Name of {}, have screensaver with timeout {} seconds".format(
+                #                 item.get('Name'), item.get('ScreenSaverTimeout')), style='List Number')
                 elif str(key).__contains__("ip_addre"):
                     for item in value:
                         document.add_paragraph(
                             "{} ({}) ".format(item[0], item[1]), style='List Number')
+                elif str(key).__contains__("appli"):
+                    for item in value:
+                        document.add_paragraph("{}".format(item), style='List Bullet')
                 else:
                     for item in value:
                         document.add_paragraph("", style='List Number')
@@ -193,10 +219,22 @@ class GUI():
                     ("Screen Capture " + " ".join(str(key).split("_")[1:])).title())
                 document.add_picture(image_name, width=image_width)
             else:
-                doc = document.add_paragraph("")
-                doc.add_run(
-                    key.replace("_", " ").title()).bold = True
-                doc.add_run(" : {} ".format(value))
+                if str(key) not in exception_list and not str(key).__contains__("saver") :
+                    doc = document.add_paragraph("")
+                    doc.add_run(
+                        key.replace("_", " ").upper()).bold = True
+                    doc.add_run(" : {} ".format(value))
+                elif str(key).__contains__("saver"):
+                    paragraph = ""
+                    if value.get("Status") == "Active":
+                        paragraph = "Desktop name {}, have screensaver activated with timeout {} seconds".format(
+                                value.get('Name'), value.get('ScreenSaverTimeout'))
+                    else:
+                        paragraph = "No Active Screensaver"
+                    doc = document.add_paragraph("")
+                    doc.add_run(
+                        key.upper()).bold = True
+                    doc.add_run(": {}".format(paragraph))
         document.save("KKPA " + owner_name + ".docx")
 
     def socket_thread(self):
@@ -222,12 +260,15 @@ class GUI():
             
             # try:
             while True:
-                self.rc = self.conn.recv(409600)
+                self.rc = self.conn.recv(40960)
                 if self.rc != b'':
                     self.raw_data = self.rc.decode().replace("\'", "\"")
                     self.dic_data = json.loads(self.raw_data)
                     self.generateKKPAFromRawData(self.dic_data)
                     self.excel_collection_value.append(self.dic_data)
+                    with open('readme '+self.dic_data.get('nama')+'.txt', 'w') as f:
+                        f.write(str(self.dic_data))
+                        f.close()
                     self.conn.sendall(str.encode("Received !!"))
                     self.addToTextbox("Received!")
                     self.textboxes.see(END)
@@ -251,12 +292,14 @@ class GUI():
             self.running = 1
             self.threads = Thread(target=self.socket_thread, daemon=True)
             self.threads.start()
+            writer = pd.ExcelWriter('KKPA.xlsx', engine='xlsxwriter')
+            writer.save()
         else:
             self.addToTextbox("thread already started.")
 
     def stopc(self):
         if self.running == 1:
-            sself.addToTextbox("stopping thread...")
+            self.addToTextbox("stopping thread...")
             self.running = 0
             # self.threads.join()
         else:
@@ -264,5 +307,6 @@ class GUI():
 
 
 root = Tk()
+root.title('Server-side PC Information Getter')
 gui = GUI(root)
 root.mainloop()

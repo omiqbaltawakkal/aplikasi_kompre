@@ -22,15 +22,10 @@ import subprocess
 import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog as fd
-from tkinter.messagebox import showinfo
 import socket
 import json
-from PIL import Image, ImageTk
 import base64
-from pathlib import Path
-import asyncio
 from datetime import datetime
-import threading
 
 
 window_width = 200
@@ -64,20 +59,16 @@ def callPowershellFunc(cmd):
 
 
 def getDevicesBrand(collection_key):
-    # # print("Getting Devices Brand Information..")
-    brand_name = callPowershellFunc(
-        "(Get-WmiObject -Class:Win32_ComputerSystem).Name")
-    brand_model = callPowershellFunc(
-        "(Get-WmiObject -Class:Win32_ComputerSystem).Model")
+    print("Getting Devices Brand Information..")
+    brand_name = callPowershellFunc("Get-CimInstance Win32_ComputerSystem | select @{name='Merk';e={$_.Manufacturer+\" \"+$_.Model}} | ft -HideTableHeaders")
     report_collection.update({
-        collection_key: returnValueParser(
-            brand_name) + " " + returnValueParser(brand_model)
+        collection_key: returnValueParser(brand_name)
     })
     # # print("Success Getting Devices Brand Information..")
 
 
 def getOSValues(collection_key):
-    # # print("Getting Operating System Information..")
+    print("Getting Operating System Information..")
     # Microsoft Windows 10 Home Single Language|C:\Windows|\Device\Harddisk0\Partition3
     os_name = callPowershellFunc("(Get-WMIObject win32_operatingsystem).name")
     os_version = callPowershellFunc(
@@ -88,22 +79,22 @@ def getOSValues(collection_key):
         collection_key: returnValueParser(os_name).split(
             "|")[0] + " " + returnValueParser(os_version) + " " + returnValueParser(os_architecture)
     })
-    # # print("Success Getting Operating System Information..")
+    print("Success Getting Operating System Information..")
 
 
 def getProcessorCapacity(collection_key):
-    # print("Getting Processor Information..")
+    print("Getting Processor Information..")
     processor_name = callPowershellFunc("(Get-WmiObject Win32_Processor).Name")
     processor_average_utilization = callPowershellFunc(
         "(Get-WmiObject -Class win32_processor -ErrorAction Stop | Measure-Object -Property LoadPercentage -Average | Select-Object Average).Average")
     report_collection.update({
         collection_key: returnValueParser(processor_name) + ' / ' + returnValueParser(processor_average_utilization) + " %"
     })
-    # print("Success Getting Processor Information..")
+    print("Success Getting Processor Information..")
 
 
 def getMemoryCapacity(collection_key):
-    # print("Getting Memory Information..")
+    print("Getting Memory Information..")
     memory_capacity = callPowershellFunc(
         "(Get-WmiObject Win32_PhysicalMemory | Measure-Object -Property capacity -Sum).sum / 1gb")
 
@@ -120,13 +111,15 @@ def getMemoryCapacity(collection_key):
     report_collection.update({
         collection_key: returnValueParser(memory_capacity) + " GB / "+ str(int(utilization_value)) + " %"
     })
-    # print("Success Getting Memory Information..")
+    print("Success Getting Memory Information..")
 
 
+    
 def getDiskCapacity(collection_key):
-    # print("Getting Storage Disk Information..")
+    print("Getting Storage Disk Information..")
+    # ft -HideTableHeaders
     storage_capacity = callPowershellFunc(
-        "Get-WmiObject win32_logicaldisk | Format-Table @{label=\"Nama\";e={$_.DeviceId} }, @{n=\"Size\";e={\'{0}GB\' -f [math]::Round($_.Size/1GB,2)}},@{n=\"FreeSpace\";e={\'{0}GB\' -f [math]::Round($_.FreeSpace/1GB,2)}}")
+        "Get-WmiObject win32_logicaldisk | Format-Table @{label=\"Name\";e={$_.DeviceId} }, @{n=\"Size\";e={\'{0}GB\' -f [math]::Round($_.Size/1GB,2)}},@{n=\"FreeSpace\";e={\'{0}GB\' -f [math]::Round($_.FreeSpace/1GB,2)}} |  ft -HideTableHeaders")
     storage_capacity = list(
         filter(None, storage_capacity.decode("utf-8").strip().split("\r\n")))
     del storage_capacity[1]  # delete ---- ----- ---- ----
@@ -144,11 +137,11 @@ def getDiskCapacity(collection_key):
     report_collection.update({
         collection_key: storage_list
     })
-    # print("Success Getting Storage Disk Information..")
+    print("Success Getting Storage Disk Information..")
 
 
 def getAntivirusProduct(collection_key):
-    # print("Getting Antiviruses Information..")
+    print("Getting Antiviruses Information..")
     list_of_antiviruses = callPowershellFunc(
         "Get-WmiObject -Namespace root/SecurityCenter2 -ClassName AntivirusProduct | Select-Object -Property display*, time*, productStat* | ft -HideTableHeaders")
     list_of_antiviruses = list_of_antiviruses.decode(
@@ -157,24 +150,24 @@ def getAntivirusProduct(collection_key):
     for item in list_of_antiviruses:
         antivirus_dict = dict()
         item_split = item.split()
-        antivirus_dict.update({"AntivirusName": " ".join(item_split[0:2])})
-        antivirus_dict.update({"LastUpdate": " ".join(item_split[2:-1])})
-        antivirus_dict.update({"Status": item_split[-1]})
+        antivirus_dict.update({"Name": " ".join(item_split[0:2])})
+        antivirus_dict.update({"Last Update": " ".join(item_split[2:-1])})
+        # antivirus_dict.update({"Status": item_split[-1]})
         list_antivirus_info.append(antivirus_dict)
     report_collection.update({
         collection_key: list_antivirus_info
     })
-    # print("Success Getting Antiviruses Information..")
+    print("Success Getting Antiviruses Information..")
 
 
 def getRemoteDesktopPortStatus(collection_key):
-    # print("Getting Remote Desktop Information..")
+    print("Getting Remote Desktop Information..")
     remote_desktop_port_status = callPowershellFunc(
         "if ((Get-ItemProperty \"hklm:\System\CurrentControlSet\Control\Terminal Server\").fDenyTSConnections -eq 0) { write-host \"Ya\" } else { write-host \"Tidak\" }")
     report_collection.update({
         collection_key: returnValueParser(remote_desktop_port_status)
     })
-    # print("Success Getting Remote Desktop Information..")
+    print("Success Getting Remote Desktop Information..")
 
 
 def getLANIPAddress(collection_key):
@@ -194,51 +187,60 @@ def getLANIPAddress(collection_key):
 def getNetworkTimeProtocol(collection_key):
     # Label(second_frame, text= "Getting Network Time Protocol..").pack()
     result = callPowershellFunc(
-        "w32tm /query /computer:$env:computername /status")
-    result = result.decode("utf-8").strip().split("\r\n")[0]
-    result = list(filter(None, result.split("\n")))
-    ntp_dict = dict()
-    ntp_status = "Synced"
-    for item in result:
-        item_split = item.split(":")
-        if str(item_split[0]) == "Source":
-            ntp_status = ntp_status + " from " + "".join(item_split[1:]).strip() + ""
-        if str(item_split[0]) == "Last Successful Sync Time":
-            ntp_status = ntp_status + " at " + " : " .join(item_split[1:]).strip()
+        "w32tm /query /status | select-string \"Source:\"")
+    result = result.decode("utf-8").strip()
+    ntp_status = ""
+    if result :
+        result = result.split(":")
+        if str(result[0]) == "Source":
+            ntp_status = result[1].split(",")[0]
+        else:
+            ntp_status = "Error - Please check manually using PowerShell and type w32tm /query /status | select-string \"Source:\""
+    else:
+        ntp_status = "Error - Please check manually using PowerShell and type : w32tm /query /status | select-string \"Source:\""
     report_collection.update(
-        {collection_key: ntp_status})
+        {collection_key: ntp_status.strip()})
     # print("Success Getting Network Time Protocol..")
 
 
 def getScreenSaverStatus(collection_key):
     # print("Getting Screen Saver Status..")
     screen_saver_lists = callPowershellFunc(
-        "Get-WmiObject -Class Win32_Desktop")
+    "Get-WmiObject -Class Win32_Desktop | Select-Object Name, ScreenSaverActive, ScreenSaverTimeout | where-object ScreenSaverActive | ft -HideTableHeader")
     screen_saver_lists = list(
-        filter(None, screen_saver_lists.decode("utf-8").strip().split("\r\n")))
-    screen_saver = list()
-    increment_size = 5
-    for x in range(0, len(screen_saver_lists), increment_size):
-        item_dict = dict()
-        for item in screen_saver_lists[x:x+increment_size]:
-            item_split = item.split(":")
-            item_dict.update({item_split[0].strip(): item_split[1].strip()})
-        if (item_dict.get("ScreenSaverActive") == 'True'):
-            screen_saver.append(item_dict)
+        filter(None, screen_saver_lists.decode("utf-8").strip().split(" ")))
+    screen_dict = dict()
+    if screen_saver_lists:
+        screen_dict.update({"Name": screen_saver_lists[0], "Status": "Active", "ScreenSaverTimeout": screen_saver_lists[2]})
+    else :
+        screen_dict.update({"Status": "Inactive"})
     report_collection.update(
-        {collection_key: screen_saver})
+        {collection_key: screen_dict})
     # print("Success Getting Screen Saver Status..")
     
 def getUsbHardeningStatus(collection_key):
     hardening_status = callPowershellFunc("Get-ItemPropertyValue \"HKLM:\\SYSTEM\\CurrentControlSet\\services\\USBSTOR\" -Name \"Start\"")
     if int(hardening_status) == 3:
-        report_collection.update({collection_key : "Ya"})
-    else: 
         report_collection.update({collection_key : "Tidak"})
+    else: 
+        report_collection.update({collection_key : "Ya"})
         
 def getEnvironmentName(collection_key):
     environment_name = callPowershellFunc("$env:computername")
     report_collection.update({collection_key : environment_name.decode("utf-8").strip()})
+
+def getInstalledApplication(collection_key):
+    result_x86 = callPowershellFunc(
+            "Get-ItemProperty HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\* |  Select-Object DisplayName | ?{ $_.DisplayName -ne $null } | sort-object -Property DisplayName -Unique | Format-Table -HideTableHeaders")
+    result_x87 = callPowershellFunc("Get-ItemProperty HKLM:\\Software\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\* | Select-Object DisplayName | ?{ $_.DisplayName -ne $null } | sort-object -Property DisplayName -Unique | Format-Table -HideTableHeaders")
+    result_x86 = list(filter(None, result_x86.decode("utf-8").split("\r\n")))
+    result_x87 = list(filter(None, result_x87.decode("utf-8").split("\r\n")))
+
+    installed_app = list()
+    for each in result_x86 + result_x87:
+        installed_app.append(each.strip())
+    installed_app.sort()
+    report_collection.update({ collection_key :installed_app})
 
 
 def saveImagePath():
@@ -275,7 +277,7 @@ def reportDataListFunction():
     recordUpdate(report_collection, "pn", personal_number_entry.get())
     recordUpdate(report_collection, "jabatan", worker_role_entry.get())
     recordUpdate(report_collection, "kode_uker",
-                worker_branch_code_entry.get())
+                worker_branch_code_entry.get().upper())
     recordUpdate(report_collection, "kondisi", clicked_cond.get())
     recordUpdate(report_collection, "bribox", clicked_bribox.get())
     getDevicesBrand("merk")
@@ -286,14 +288,11 @@ def reportDataListFunction():
     getRemoteDesktopPortStatus("rdp")
     getUsbHardeningStatus("hardening")
     getNetworkTimeProtocol("ntp")
-    getLANIPAddress("ip_address")    
+    getLANIPAddress("ip_address")
+    getScreenSaverStatus("screensaver")
     getDiskCapacity("disk")
     getAntivirusProduct("antivirus")
     getScreenSaverStatus("screensaver")
-    
-    with open('readme '+worker_name_entry.get()+'.txt', 'w') as f:
-        f.write(str(report_collection))
-        f.close()
 
 
 def getStartProcedures():
@@ -315,8 +314,7 @@ def getStartProcedures():
 if __name__ == '__main__':
 
     root = tk.Tk()
-    root.title(string='LHPK')
-    
+    root.title('Client-side PC Information Getter')
     # get the screen dimension
     screen_width = root.winfo_screenwidth()
     screen_height = root.winfo_screenheight()
@@ -329,25 +327,7 @@ if __name__ == '__main__':
     #            width x height
     root.geometry(f'400x700+{center_x}+{center_y}')
     
-    # main_frame = Frame(root)
-    # main_frame.grid(row=0, column=0, sticky="news")
-
-    # my_canvas = Canvas(main_frame)
-    # my_canvas.grid(row=0, column=0, sticky="news")
-
-    # my_scrollbar = ttk.Scrollbar(
-    #     main_frame, orient=VERTICAL, command=my_canvas.yview)
-    # my_scrollbar.grid(row=0, column=1, sticky="ns")
-
-    # my_canvas.configure(yscrollcommand=my_scrollbar.set)
-    # my_canvas.configure(scrollregion=my_canvas.bbox("all"))
-
-    # second_frame = Frame(my_canvas)
-
-    # my_canvas.create_window((0, 0), window=second_frame, anchor="nw")
-
     x =0
-    
     ip_label = tk.Label(root, text='IP/Port Receiver     :')
     # name_label.pack(side = LEFT, fill=X, expand=True)
     ip_label.grid(column = 0, row = x,sticky = 'w', pady=20)
@@ -358,7 +338,6 @@ if __name__ == '__main__':
     # worker_name_entry.pack(side = RIGHT, fill=X, expand=True)
     ip_entry.grid(column = 1, row = x,sticky='nesw', pady=20)
     ip_entry.focus()
-    ########### 
 
     name_label = tk.Label(root, text='Nama Pekerja     :')
     # name_label.pack(side = LEFT, fill=X, expand=True)
@@ -400,13 +379,13 @@ if __name__ == '__main__':
     # open image
     
     rows = x+1+4
-    condition_label = tk.Label(root, text='Kondisi          :')
+    condition_label = tk.Label(root, text='Kondisi Fisik    :')
     condition_label.grid(column = 0, row = rows,sticky = 'w', pady=20)
     
-    cond_options = ["Bermasalah", "Baik"]
+    cond_options = ["Baik", "Bermasalah"]
     clicked_cond = tk.StringVar()
     clicked_cond.set( "Select" )
-    condition_drop = tk.OptionMenu( root , clicked_cond , *cond_options ).grid(column = 1, row = rows)
+    tk.OptionMenu( root , clicked_cond , *cond_options ).grid(column = 1, row = rows)
     rows+=1
     
     
@@ -416,7 +395,7 @@ if __name__ == '__main__':
     sticker_options = ["Ya", "Tidak"]
     clicked_bribox = tk.StringVar()
     clicked_bribox.set( "Select" )
-    bribox_drop = tk.OptionMenu( root , clicked_bribox , *sticker_options ).grid(column = 1, row = rows)
+    tk.OptionMenu( root , clicked_bribox , *sticker_options ).grid(column = 1, row = rows)
     rows+=1
     
     # for item in image_dict_list:
@@ -430,7 +409,7 @@ if __name__ == '__main__':
     #         command=saveImagePath
     #     ).grid(column = 1, row = rows, sticky='nesw', pady=20)
 
-    start_button = ttk.Button(
+    ttk.Button(
         root,
         text="Submit",
         command=getStartProcedures,
