@@ -7,33 +7,18 @@ import json
 import subprocess
 import re
 import base64
-import pika
+import io
+import bson
+import struct
 
-server_ip = "10.233.79.249"
-server_port = 137
 
-serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-serverSocket.bind((server_ip, server_port))
-serverSocket.listen()
-# serverSocket.settimeout(5)
-count = 0
-while(True):
-    (conn, addr) = serverSocket.accept()
-    temp =''
-    # try:
-    while True:
-        rc = conn.recv(40960)
-        if not rc:
-            break
-        temp += rc.decode()
-    conn.sendall(b'end:')
-        
-    with open('readme test.txt', 'w') as f:
-        f.write(str(temp))
-        f.close()
-    
-    conn.close()
-    break
-    
-        
+# def callPowershellFunc(cmd):
+#     result = subprocess.Popen(
+#         ["powershell", "-Command", cmd], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+#     out, err = result.communicate()
+#     return out
+
+# os_name = callPowershellFunc("(New-Object -com \"Microsoft.Update.AutoUpdate\").Results | select-object \"*Install*\" | ft -HideTableHeaders")
+
+# print(os_name.decode().strip())

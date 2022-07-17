@@ -1,25 +1,22 @@
 # import the socket module
+
+import re
+import struct
 import json
 import socket
-from docx import Document
-from docx.enum.style import WD_STYLE_TYPE
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Inches, Cm, Pt
-from PIL import Image, ImageTk
+import tkinter.scrolledtext as scrolledtext
 import base64
+from threading import Thread
+from docx import Document
+from docx.shared import Cm, Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 import xlsxwriter
 from tkinter import *
 from tkinter import ttk
-import tkinter.scrolledtext as scrolledtext
-from threading import Thread
-import traceback
-from time import sleep, time
 import pandas as pd
-import re
 
 
 break_condition = True
-heading = 'KKPA PC Pekerja'
 
 
 window_width = 500
@@ -92,7 +89,7 @@ class GUI():
         else: 
             f = open('readme_self.excel_collection_value.txt', 'r')
             data = f.read()
-            data = json.loads(data.replace("\'", "\""))
+            data = json.loads(data)
             
         #asumsi end process = 1 uker -> data[0].get("kode_uker") == data[N].get("kode_uker")
         kode_uker = data[0].get("kode_uker")
@@ -135,6 +132,10 @@ class GUI():
                         value = splits[0]
                     elif key.__contains__("saver"):
                         value = value.get("Status")
+                    elif key.__contains__("operating"):
+                        value = '\n'.join(': '.join((key,val)) for (key,val) in value.items())
+                    elif key == "ntp":
+                        value = value.split("-")[0]
                     else:
                         pass
                 temp.update({key.replace("_"," ").upper(): value})
@@ -157,14 +158,14 @@ class GUI():
         # Header
         heading_style = document.styles['Body Text']
         head = document.add_paragraph(style=heading_style).add_run(
-            f'{heading}' + ' ' + owner_name)
+           "KKPA Pengambilan Data PC " +owner_name)
         document.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
         head.font.size = Pt(20)
         head.font.bold = True
-        image_width = Cm(10)
+        image_width = Cm(15)
         
         exception_list = ["tanggal", "nama", "pn", "jabatan", "kode_uker"]
-        #Template docx
+        # Template docx
         # informasi umum
         document.add_heading("Infomasi Umum", 1)
         for key, value in dict_raw_data.items():
@@ -184,17 +185,13 @@ class GUI():
                     key.replace("_", " ").upper())).bold = True
                 if str(key).__contains__("disk"):
                     for item in value:
-                        document.add_paragraph(" Disk \"{}\" Total / Free Space : {} / {} ".format(
-                            item.get('Name'), item.get('Size'), item.get('Free Space')), style='List Number')
+                        percent = int(int(item.get('FreeSpace'))/int(item.get('Size')))
+                        document.add_paragraph(" Disk \"{}\" Total / Free Space : {} / {} / {}%".format(
+                            item.get('Name'), item.get('Size'), item.get('FreeSpace'), percent), style='List Number')
                 elif str(key).__contains__("antivirus"):
                     for item in value:
                         document.add_paragraph("{}, updated on {}".format(
                             item.get('Name'), item.get('Last Update')), style='List Number')
-                # elif str(key).__contains__("saver"):
-                #     for item in value:
-                #         if item.get('ScreenSaverTimeout'):
-                #             document.add_paragraph("Desktop Account Name of {}, have screensaver with timeout {} seconds".format(
-                #                 item.get('Name'), item.get('ScreenSaverTimeout')), style='List Number')
                 elif str(key).__contains__("ip_addre"):
                     for item in value:
                         document.add_paragraph(
@@ -208,22 +205,17 @@ class GUI():
                         for key, value in item.items():
                             document.add_paragraph(" {} : {} ".format(
                                 key, str(value)), style='List Bullet 2')
-            elif str(key).split("_")[0] == 'image':
-                image_name = owner_name + '_' + str(key)+'.jpg'
-                base64_img_bytes = value.encode('utf-8')
-                with open(image_name, 'wb') as file_to_save:
-                    decoded_image_data = base64.decodebytes(base64_img_bytes)
-                    file_to_save.write(decoded_image_data)
-                    # " ".join()
-                document.add_paragraph(
-                    ("Screen Capture " + " ".join(str(key).split("_")[1:])).title())
-                document.add_picture(image_name, width=image_width)
             else:
-                if str(key) not in exception_list and not str(key).__contains__("saver") :
+                if str(key) not in exception_list and not str(key).__contains__("saver") and not str(key).__contains__("image") and not str(key).__contains__("tambahan") and not str(key).__contains__("operating"):
                     doc = document.add_paragraph("")
                     doc.add_run(
                         key.replace("_", " ").upper()).bold = True
                     doc.add_run(" : {} ".format(value))
+                elif str(key).__contains__("operating"):
+                    doc = document.add_paragraph("")
+                    doc.add_run(
+                        key.replace("_", " ").upper()).bold = True
+                    doc.add_run(" : {}, updated on {} ".format(value.get("Name"), value.get("Last Update Installation Date")))
                 elif str(key).__contains__("saver"):
                     paragraph = ""
                     if value.get("Status") == "Active":
@@ -235,6 +227,21 @@ class GUI():
                     doc.add_run(
                         key.upper()).bold = True
                     doc.add_run(": {}".format(paragraph))
+        
+        document.add_heading("Foto",1)
+        for key, value in dict_raw_data.items():
+            if str(key).__contains__("image"):
+                image_name = owner_name + '_' + str(key)+'.jpg'
+                myimage = base64.b64decode(value)
+                f_image = open(image_name, 'wb')
+                f_image.write(myimage)
+                f_image.close()
+                document.add_paragraph(
+                    ("Foto " + " ".join(str(key).split("_")[1:])).title(), style="List Number")
+                document.add_picture(image_name, width= image_width)
+        document.add_heading("Informasi Tambahan",1)
+        document.add_paragraph(dict_raw_data.get("informasi_tambahan"))
+        #end template doc
         document.save("KKPA " + owner_name + ".docx")
 
     def socket_thread(self):
@@ -248,32 +255,34 @@ class GUI():
 
         self.serverSocket.bind((self.server_ip, self.server_port))
         self.serverSocket.listen()
-        # self.serverSocket.settimeout(5)
+        self.addToTextbox("CONNECTED!")
         self.count = 0
         while(self.running == 1):
             (self.conn, self.addr) = self.serverSocket.accept()
             
-            self.addToTextbox("CONNECTED!")
             self.count = self.count + 1
             
-            self.addToTextbox("Accepted {} connections so far, from {} \n".format(self.count, self.addr[0]))
-            
-            # try:
-            while True:
-                self.rc = self.conn.recv(40960)
-                if self.rc != b'':
-                    self.raw_data = self.rc.decode().replace("\'", "\"")
-                    self.dic_data = json.loads(self.raw_data)
-                    self.generateKKPAFromRawData(self.dic_data)
-                    self.excel_collection_value.append(self.dic_data)
-                    with open('readme '+self.dic_data.get('nama')+'.txt', 'w') as f:
-                        f.write(str(self.dic_data))
-                        f.close()
-                    self.conn.sendall(str.encode("Received !!"))
-                    self.addToTextbox("Received!")
-                    self.textboxes.see(END)
-                    self.conn.close()
-                break
+            self.addToTextbox("Accepted {} connections so far, from {}".format(self.count, self.addr[0]))
+        
+            self.json_length = struct.unpack(">I", self.conn.recv(4))[0]
+            self.json_data = b""
+            while len(self.json_data) < self.json_length:
+                self.chunk = self.conn.recv(min(40960, self.json_length - len(self.json_data)))
+                if not self.chunk:
+                    break
+                self.json_data += self.chunk
+            self.dic_data = json.loads(self.json_data.decode("utf-8"))
+            # self.dic_data = json.loads(self.raw_data)
+            self.generateKKPAFromRawData(self.dic_data)
+            self.excel_collection_value.append(self.dic_data)
+            with open('readme '+self.dic_data.get('nama')+'.txt', 'w') as f:
+                f.write(str(self.dic_data))
+                f.close()
+            self.conn.sendall(str.encode("Received !!"))
+            self.addToTextbox(f"Received from {self.addr[0]}!")
+            self.textboxes.see(END)
+            self.conn.close()
+                # break
             if self.count == self.max_number:
                 self.running = 0
                 break
@@ -285,6 +294,7 @@ class GUI():
         self.textboxes.see(END)
         self.generateKKPAExcel()
         self.serverSocket.close()
+        root.destroy()
 
     def startc(self):
         if self.running == 0:

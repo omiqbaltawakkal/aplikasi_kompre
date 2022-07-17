@@ -1,61 +1,55 @@
-from tkinter import *   # use lower case tkinter for python3
-from threading import Thread
-from time import sleep, time
 import socket
-import xlsxwriter
 import json
 import subprocess
-import re
-import base64
-import pika
+from base64 import b64encode
+import struct
 
-image_filepath_list = list()
+image_filepath_list = ['C:/Users/iqbal/Downloads/task manager.JPG', 'C:/Users/iqbal/Downloads/delhivery.jpg', 'C:/Users/iqbal/Downloads/aramex big red.png']
 report_collection = dict()
-
-def saveImagePath():
-    # f_types = [('Jpg Files', '*.jpg'),
-    #            ('PNG Files', '*.png')]
-    # filename = fd.askopenfilename(multiple=False)
-    # filename = open('taskmanager.jpg', "rb")
-    image_filepath_list.append('[FILENAME]')
-
-
-def upload_file(collection_key, image_file_path):
-    file_path = image_file_path
-    f = open(file_path, "rb")
-    im_bytes = f.read()
-    im_b64 = base64.urlsafe_b64encode(im_bytes)
-    report_collection.update({collection_key: im_b64})
-
-saveImagePath()
-for index, each in enumerate(image_filepath_list):
-    exte = each.split(".")[1]
-    upload_file("image "+str(index)+"."+exte, each)
-    
-
-with open('readme test.txt', 'w') as f:
-        f.write(str(report_collection))
-        f.close()
-
 
 report_collection.update({"name":"iqbal"})
 
-server_ip = "10.233.79.249"
-server_port = 137
+def upload_file(collection_key, image_file_path):
+    f = open(image_file_path, "rb")
+    im_bytes = f.read()
+    base64_bytes = b64encode(im_bytes)
+    my_file = base64_bytes.decode("utf-8")
+    report_collection.update({collection_key: my_file})
+
+# def saveImagePath():
+    # f_types = [('Jpg Files', '*.jpg'),
+    #            ('PNG Files', '*.png')]
+    # filename = fd.askopenfilename(multiple=False)
+# f = open('taskmanager.jpg', "rb")
+# im_bytes = f.read()
+# base64_bytes = b64encode(im_bytes)
+# myFile = base64_bytes.decode("utf-8")
+# report_collection.update({"image": myFile})
 
 
-socketObject = socket.socket()
-socketObject.connect((server_ip, server_port))
+# saveImagePath()
+for image_files in image_filepath_list:
+    key = "image_"+(str(image_files).rsplit("/", maxsplit=1)[-1]).split(".")[0]
+    upload_file(key, image_files)
+    
+print(report_collection.keys())
 
-HTTPMessage = report_collection
-bytes = str.encode(HTTPMessage)
 
-socketObject.sendall(bytes)
+server_ip = "127.0.0.1"
+server_port = 1000
 
-while(True):
-    data = socketObject.recv(1024)
-    print(data)
-    print("Connection closed")
-    break
+# file_data = json.dumps(report_collection).encode("utf-8")
 
-socketObject.close()
+# socketObject = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+# socketObject.connect((server_ip, server_port))
+# socketObject.sendall(struct.pack(">I", len(file_data)))
+# socketObject.sendall(file_data)
+#     # file_data = file.read(file)
+
+# while True:
+#     data = socketObject.recv(1024)
+#     print(data)
+#     print("Connection closed")
+#     break
+
+# socketObject.close()

@@ -20,12 +20,14 @@
 
 import subprocess
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, scrolledtext
 from tkinter import filedialog as fd
 import socket
 import json
-import base64
+from base64 import b64encode
 from datetime import datetime
+import struct
+import time
 
 
 window_width = 200
@@ -39,8 +41,9 @@ report_collection = dict()
 
 image_filepath_list = list()
 
-image_dict_list = ["Task Manager", "fisik", "bribox"]
-# "stiker bribox", "dxdiag image", "saved password"
+image_dict_list = ["Kondisi Fisik",
+                   "Stiker Pengadaan dan BRIBOX", "Saved Password"
+                   ]
 
 
 def recordUpdate(dictionary, collection_key, collection_value):
@@ -60,11 +63,12 @@ def callPowershellFunc(cmd):
 
 def getDevicesBrand(collection_key):
     print("Getting Devices Brand Information..")
-    brand_name = callPowershellFunc("Get-CimInstance Win32_ComputerSystem | select @{name='Merk';e={$_.Manufacturer+\" \"+$_.Model}} | ft -HideTableHeaders")
+    brand_name = callPowershellFunc(
+        "Get-WMIObject Win32_ComputerSystem | select @{name='Merk';e={$_.Manufacturer+\" \"+$_.Model}} | ft -HideTableHeaders")
     report_collection.update({
         collection_key: returnValueParser(brand_name)
     })
-    # # print("Success Getting Devices Brand Information..")
+    print("Success Getting Devices Brand Information..")
 
 
 def getOSValues(collection_key):
@@ -75,10 +79,14 @@ def getOSValues(collection_key):
         "(Get-WMIObject win32_operatingsystem).version")
     os_architecture = callPowershellFunc(
         "(Get-WMIObject win32_operatingsystem).OSArchitecture")
-    report_collection.update({
-        collection_key: returnValueParser(os_name).split(
-            "|")[0] + " " + returnValueParser(os_version) + " " + returnValueParser(os_architecture)
+    last_installation_date = callPowershellFunc("(New-Object -com \"Microsoft.Update.AutoUpdate\").Results | select-object \"*Install*\" | ft -HideTableHeaders")
+    temp = dict()
+    temp.update({
+        "Name": returnValueParser(os_name).split(
+            "|")[0] + " " + returnValueParser(os_version) + " " + returnValueParser(os_architecture),
+        "Last Update Installation Date": returnValueParser(last_installation_date)
     })
+    report_collection.update({collection_key: temp})
     print("Success Getting Operating System Information..")
 
 
@@ -88,7 +96,8 @@ def getProcessorCapacity(collection_key):
     processor_average_utilization = callPowershellFunc(
         "(Get-WmiObject -Class win32_processor -ErrorAction Stop | Measure-Object -Property LoadPercentage -Average | Select-Object Average).Average")
     report_collection.update({
-        collection_key: returnValueParser(processor_name) + ' / ' + returnValueParser(processor_average_utilization) + " %"
+        collection_key: returnValueParser(
+            processor_name) + ' / ' + returnValueParser(processor_average_utilization) + " %"
     })
     print("Success Getting Processor Information..")
 
@@ -109,12 +118,12 @@ def getMemoryCapacity(collection_key):
     utilization_value = (total_visible_memory_size -
                          free_physical_memory_size)*100 / total_visible_memory_size
     report_collection.update({
-        collection_key: returnValueParser(memory_capacity) + " GB / "+ str(int(utilization_value)) + " %"
+        collection_key: returnValueParser(
+            memory_capacity) + " GB / " + str(int(utilization_value)) + " %"
     })
     print("Success Getting Memory Information..")
 
 
-    
 def getDiskCapacity(collection_key):
     print("Getting Storage Disk Information..")
     # ft -HideTableHeaders
@@ -132,7 +141,7 @@ def getDiskCapacity(collection_key):
         item_dict = dict()
         storage_item = list(filter(None, storage_capacity[x].split()))
         for y in range(len(storage_item)):
-            item_dict.update({item_dict_keys[y] : storage_item[y]})
+            item_dict.update({item_dict_keys[y]: storage_item[y]})
         storage_list.append(item_dict)
     report_collection.update({
         collection_key: storage_list
@@ -171,26 +180,26 @@ def getRemoteDesktopPortStatus(collection_key):
 
 
 def getLANIPAddress(collection_key):
-    # Label(second_frame, text= "Getting IP Address..").pack() 
+    print("Getting IP Address..")
     result = callPowershellFunc(
         "Get-WmiObject win32_networkadapterconfiguration | Select-Object -Property @{Name = 'IPAddress' ; Expression = {($PSItem.IPAddress[0])}}, MacAddress | Where IPAddress -NE $null | ft -HideTableHeaders")
-    #Get-WmiObject Win32_NetworkAdapterConfiguration -Filter "DHCPEnabled=$True" | Where-Object {$_.IPEnabled -AND $_.IPAddress -gt 0} |Select-object IPAddress, MACAddress
+    # Get-WmiObject Win32_NetworkAdapterConfiguration -Filter "DHCPEnabled=$True" | Where-Object {$_.IPEnabled -AND $_.IPAddress -gt 0} |Select-object IPAddress, MACAddress
     if result:
         result = result.decode("utf-8").strip().split("\r\n")
         report_collection.update(
-            {collection_key: result[0].split()[0] + " / "+ result[0].split()[1]})
+            {collection_key: result[0].split()[0] + " / " + result[0].split()[1]})
     else:
         report_collection.update({collection_key: "IP Not Found"})
-    # Label(second_frame, text= "Success Getting IP Address..").pack() 
+    print("Success Getting IP Address..")
 
 
 def getNetworkTimeProtocol(collection_key):
-    # Label(second_frame, text= "Getting Network Time Protocol..").pack()
+    print("Getting Network Time Protocol..")
     result = callPowershellFunc(
         "w32tm /query /status | select-string \"Source:\"")
     result = result.decode("utf-8").strip()
     ntp_status = ""
-    if result :
+    if result:
         result = result.split(":")
         if str(result[0]) == "Source":
             ntp_status = result[1].split(",")[0]
@@ -200,89 +209,104 @@ def getNetworkTimeProtocol(collection_key):
         ntp_status = "Error - Please check manually using PowerShell and type : w32tm /query /status | select-string \"Source:\""
     report_collection.update(
         {collection_key: ntp_status.strip()})
-    # print("Success Getting Network Time Protocol..")
+    print("Success Getting Network Time Protocol..")
 
 
 def getScreenSaverStatus(collection_key):
-    # print("Getting Screen Saver Status..")
+    print("Getting Screen Saver Status..")
     screen_saver_lists = callPowershellFunc(
-    "Get-WmiObject -Class Win32_Desktop | Select-Object Name, ScreenSaverActive, ScreenSaverTimeout | where-object ScreenSaverActive | ft -HideTableHeader")
-    screen_saver_lists = list(
-        filter(None, screen_saver_lists.decode("utf-8").strip().split(" ")))
+        "Get-WmiObject -Class Win32_Desktop | Select-Object Name, ScreenSaverActive, ScreenSaverTimeout | where-object ScreenSaverActive | ft -HideTableHeader")
     screen_dict = dict()
     if screen_saver_lists:
-        screen_dict.update({"Name": screen_saver_lists[0], "Status": "Active", "ScreenSaverTimeout": screen_saver_lists[2]})
-    else :
+        screen_saver_lists = list(
+            filter(None, screen_saver_lists.decode("utf-8").strip().split(" ")))
+        screen_dict.update(
+            {"Name": screen_saver_lists[0], "Status": "Active", "ScreenSaverTimeout": screen_saver_lists[2]})
+    else:
         screen_dict.update({"Status": "Inactive"})
     report_collection.update(
         {collection_key: screen_dict})
-    # print("Success Getting Screen Saver Status..")
-    
+    print("Success Getting Screen Saver Status..")
+
+
 def getUsbHardeningStatus(collection_key):
-    hardening_status = callPowershellFunc("Get-ItemPropertyValue \"HKLM:\\SYSTEM\\CurrentControlSet\\services\\USBSTOR\" -Name \"Start\"")
+    print("Getting Hardening Status..")
+    hardening_status = callPowershellFunc(
+        "Get-ItemPropertyValue \"HKLM:\\SYSTEM\\CurrentControlSet\\services\\USBSTOR\" -Name \"Start\"")
     if int(hardening_status) == 3:
-        report_collection.update({collection_key : "Tidak"})
-    else: 
-        report_collection.update({collection_key : "Ya"})
-        
+        report_collection.update({collection_key: "Tidak"})
+    else:
+        report_collection.update({collection_key: "Ya"})
+    print("Success Getting Hardening Status..")
+
+
 def getEnvironmentName(collection_key):
     environment_name = callPowershellFunc("$env:computername")
-    report_collection.update({collection_key : environment_name.decode("utf-8").strip()})
+    report_collection.update(
+        {collection_key: environment_name.decode("utf-8").strip()})
+
 
 def getInstalledApplication(collection_key):
+    print("Getting Installed Applications..")
     result_x86 = callPowershellFunc(
-            "Get-ItemProperty HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\* |  Select-Object DisplayName | ?{ $_.DisplayName -ne $null } | sort-object -Property DisplayName -Unique | Format-Table -HideTableHeaders")
-    result_x87 = callPowershellFunc("Get-ItemProperty HKLM:\\Software\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\* | Select-Object DisplayName | ?{ $_.DisplayName -ne $null } | sort-object -Property DisplayName -Unique | Format-Table -HideTableHeaders")
+        "Get-ItemProperty HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\* |  Select-Object DisplayName | ?{ $_.DisplayName -ne $null } | sort-object -Property DisplayName -Unique | Format-Table -HideTableHeaders")
+    result_x87 = callPowershellFunc(
+        "Get-ItemProperty HKLM:\\Software\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\* | Select-Object DisplayName | ?{ $_.DisplayName -ne $null } | sort-object -Property DisplayName -Unique | Format-Table -HideTableHeaders")
     result_x86 = list(filter(None, result_x86.decode("utf-8").split("\r\n")))
     result_x87 = list(filter(None, result_x87.decode("utf-8").split("\r\n")))
+    print("Success Getting Installed Applications..")
 
     installed_app = list()
     for each in result_x86 + result_x87:
         installed_app.append(each.strip())
     installed_app.sort()
-    report_collection.update({ collection_key :installed_app})
+    report_collection.update({collection_key: installed_app})
 
 
 def saveImagePath():
-    f_types = [('Jpg Files', '*.jpg'),
+    f_types = [('JPG Files', '*.jpg'),
                ('PNG Files', '*.png')]
-    filename = fd.askopenfilename(multiple=False)
+    filename = fd.askopenfilename(multiple=False, filetypes=f_types)
     image_filepath_list.append(filename)
 
 
 def upload_file(collection_key, image_file_path):
-    file_path = image_file_path
-    f = open(file_path, "rb")
+    f = open(image_file_path, "rb")
     im_bytes = f.read()
-    im_b64 = base64.b64encode(im_bytes).decode("utf8")
-    report_collection.update({collection_key: im_b64})
+    base64_bytes = b64encode(im_bytes)
+    my_file = base64_bytes.decode("utf-8")
+    report_collection.update({collection_key: my_file})
 
 
 def sendDataToHost(socketObject, message):
-    # print("Start Sending to Receiver..")
-    bytess = str.encode(message)
-    socketObject.sendall(bytess)
+    print("Start Sending to Receiver..")
+    file_data = json.dumps(message).encode("utf-8")
+    socketObject.sendall(struct.pack(">I", len(file_data)))
+    socketObject.sendall(file_data)
 
-    while(True):
+    while True:
         data = socketObject.recv(1024)
-        # print(data)
+        print(data)
         print("Connection closed")
         break
 
     socketObject.close()
 
+
 def reportDataListFunction():
-    recordUpdate(report_collection, "tanggal",  str(datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
+    print("Start Function...")
+    recordUpdate(report_collection, "tanggal",  str(
+        datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
     recordUpdate(report_collection, "nama", worker_name_entry.get())
     recordUpdate(report_collection, "pn", personal_number_entry.get())
     recordUpdate(report_collection, "jabatan", worker_role_entry.get())
     recordUpdate(report_collection, "kode_uker",
-                worker_branch_code_entry.get().upper())
+                 worker_branch_code_entry.get().upper())
     recordUpdate(report_collection, "kondisi", clicked_cond.get())
     recordUpdate(report_collection, "bribox", clicked_bribox.get())
     getDevicesBrand("merk")
     getEnvironmentName("nama_pc")
-    getOSValues("os")
+    getOSValues("operating_system")
     getProcessorCapacity("processor_details")
     getMemoryCapacity("ram")
     getRemoteDesktopPortStatus("rdp")
@@ -293,19 +317,36 @@ def reportDataListFunction():
     getDiskCapacity("disk")
     getAntivirusProduct("antivirus")
     getScreenSaverStatus("screensaver")
-
+    getInstalledApplication("application")
+    for image_files in image_filepath_list:
+        key = "image_"+(str(image_files).rsplit("/", maxsplit=1)[-1]).split(".")[0]
+        upload_file(key, image_files)
+    recordUpdate(report_collection, "informasi_tambahan",
+                 text_area.get(0.0, tk.END))
+    with open('readme '+worker_name_entry.get()+'.txt', 'w') as f:
+        f.write(str(report_collection))
+        f.close()
+        
+    print("End Function...")
+        
+#   perbandingan waktu - kasih timestamp -> ceklis
+#   validitas - dikelabuin -> BELUM BISA?!
+#   human error - salah penginputan -> gimana?
+#   efisiensi penggunaan - TASK MANAGER
 
 def getStartProcedures():
+    start = time.time()
     server_ip = str(ip_entry.get().split(":")[0])
     server_port = int(ip_entry.get().split(":")[1])
-    
+
     # threads = threading.Thread(target=).start()
     reportDataListFunction()
     socketObject = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     socketObject.connect((server_ip, server_port))
     # # Label(second_frame, text='Connected to designated IP for sending..').pack()
-    sendDataToHost(socketObject, str(report_collection))
-    message_box = tk.messagebox.showinfo("Info", "Selesai...")
+    sendDataToHost(socketObject, report_collection)
+    end = time.time()
+    message_box = tk.messagebox.showinfo("Info", "Selesai dalam waktu {0:.2f} detik.".format(end-start))
     root.destroy()
 
 
@@ -320,104 +361,126 @@ if __name__ == '__main__':
     screen_height = root.winfo_screenheight()
 
     # find the center point
-    center_x = int(0.45 *screen_width)
-    center_y = int(0.2 * screen_height)
+    center_x = int(0.35 * screen_width)
+    center_y = int(0.1 * screen_height)
 
     # set the position of the window to the center of the screen
     #            width x height
-    root.geometry(f'400x700+{center_x}+{center_y}')
+    root.geometry(f'500x400+{center_x}+{center_y}')
+    main_frame = tk.Frame(root)
+    main_frame.pack(fill=tk.BOTH, expand=1)
     
-    x =0
-    ip_label = tk.Label(root, text='IP/Port Receiver     :')
-    # name_label.pack(side = LEFT, fill=X, expand=True)
-    ip_label.grid(column = 0, row = x,sticky = 'w', pady=20)
+    my_canvas = tk.Canvas(main_frame)
+    my_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=1)
     
+    my_scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=my_canvas.yview)
+    my_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+    
+    my_canvas.configure(yscrollcommand=my_scrollbar.set)
+    my_canvas.bind('<Configure>', lambda e: my_canvas.configure(scrollregion=my_canvas.bbox("all")))
+    
+    second_frame = tk.Frame(my_canvas)
+    my_canvas.create_window((0,0), window=second_frame, anchor = 'nw')
+        
+    x = 0
 
+    ip_label = tk.Label(second_frame, text='IP/Port Receiver  :')
+    # ip_label.pack(side = 'left', fill='x', expand=True)
+    ip_label.grid(column=0, row=x, sticky='w', pady=20)
+    
     ip_str_var = tk.StringVar()
-    ip_entry = tk.Entry(root, textvariable=ip_str_var)
-    # worker_name_entry.pack(side = RIGHT, fill=X, expand=True)
-    ip_entry.grid(column = 1, row = x,sticky='nesw', pady=20)
+    ip_entry = tk.Entry(second_frame, textvariable=ip_str_var)
+    # # worker_name_entry.pack(side = RIGHT, fill=X, expand=True)
+    ip_entry.grid(column=1, row=x, sticky='nesw', pady=20)
     ip_entry.focus()
 
-    name_label = tk.Label(root, text='Nama Pekerja     :')
+    name_label = tk.Label(second_frame, text='Nama Pekerja  :')
     # name_label.pack(side = LEFT, fill=X, expand=True)
-    name_label.grid(column = 0, row = x+1+0,sticky = 'w', pady=20)
+    name_label.grid(column=0, row=x+1+0, sticky='w', pady=20)
 
     worker_name = tk.StringVar()
-    worker_name_entry = tk.Entry(root, textvariable=worker_name)
+    worker_name_entry = tk.Entry(second_frame, textvariable=worker_name)
     # worker_name_entry.pack(side = RIGHT, fill=X, expand=True)
-    worker_name_entry.grid(column = 1, row = x+1+0,sticky='nesw', pady=20)
+    worker_name_entry.grid(column=1, row=x+1+0, sticky='nesw', pady=20)
 
-    personal_number_label = tk.Label(root, text='PN Pekerja        :')
-    personal_number_label.grid(column = 0, row = x+1+1,sticky = 'w', pady=20)
+    personal_number_label = tk.Label(second_frame, text='PN Pekerja  :')
+    personal_number_label.grid(column=0, row=x+1+1, sticky='w', pady=20)
     # personal_number_label.pack(side = LEFT,fill=X, expand=True)
 
     personal_number = tk.IntVar()
-    personal_number_entry = tk.Entry(root, textvariable=personal_number)
-    personal_number_entry.grid(column = 1, row = x+1+1, sticky='nesw', pady=20)
+    personal_number_entry = tk.Entry(second_frame, textvariable=personal_number)
+    personal_number_entry.grid(column=1, row=x+1+1, sticky='nesw', pady=20)
     # personal_number_entry.pack(side = RIGHT,fill=X, expand=True)
 
-    worker_role_label = tk.Label(root, text='Jabatan           :')
-    worker_role_label.grid(column = 0, row = x+1+2,sticky = 'w', pady=20)
+    worker_role_label = tk.Label(second_frame, text='Jabatan  :')
+    worker_role_label.grid(column=0, row=x+1+2, sticky='w', pady=20)
     # worker_role_label.pack(side = LEFT,fill=X, expand=True)
 
     worker_role = tk.StringVar()
-    worker_role_entry = tk.Entry(root, textvariable=worker_role)
-    worker_role_entry.grid(column = 1, row = x+1+2,sticky='nesw', pady=20)
+    worker_role_entry = tk.Entry(second_frame, textvariable=worker_role)
+    worker_role_entry.grid(column=1, row=x+1+2, sticky='nesw', pady=20)
     # worker_role_entry.pack(side = RIGHT,fill=X, expand=True)
 
-    worker_branch_code_label = tk.Label(root, text='Kode Uker          :')
-    worker_branch_code_label.grid(column = 0, row = x+1+3,sticky = 'w', pady=20)
+    worker_branch_code_label = tk.Label(second_frame, text='Kode Uker  :')
+    worker_branch_code_label.grid(column=0, row=x+1+3, sticky='w', pady=20)
     # worker_branch_code_label.pack(side = LEFT,fill=X, expand=True)
 
-    worker_branch_code = tk.IntVar()
+    worker_branch_code = tk.StringVar()
     worker_branch_code_entry = tk.Entry(
-        root, textvariable=worker_branch_code)
-    worker_branch_code_entry.grid(column = 1, row = x+1+3,sticky='nesw', pady=20)
+        second_frame, textvariable=worker_branch_code)
+    worker_branch_code_entry.grid(column=1, row=x+1+3, sticky='nesw', pady=20)
     # worker_branch_code_entry.pack(side = RIGHT,fill=X, expand=True)
 
     # open image
-    
+
     rows = x+1+4
-    condition_label = tk.Label(root, text='Kondisi Fisik    :')
-    condition_label.grid(column = 0, row = rows,sticky = 'w', pady=20)
-    
+    condition_label = tk.Label(second_frame, text='Keterangan Kondisi Fisik  :')
+    condition_label.grid(column=0, row=rows, sticky='w', pady=20)
+
     cond_options = ["Baik", "Bermasalah"]
     clicked_cond = tk.StringVar()
-    clicked_cond.set( "Select" )
-    tk.OptionMenu( root , clicked_cond , *cond_options ).grid(column = 1, row = rows)
-    rows+=1
-    
-    
-    sticker_label = tk.Label(root, text='Ada Sticker Bribox          :')
-    sticker_label.grid(column = 0, row = rows,sticky = 'w', pady=20)
-    
+    clicked_cond.set("Select")
+    tk.OptionMenu(second_frame, clicked_cond, *cond_options).grid(column=1, row=rows)
+    rows += 1
+
+    sticker_label = tk.Label(
+        second_frame, text='Terdapat Sticker Pengadaan dan BRIBOX  :')
+    sticker_label.grid(column=0, row=rows, sticky='w', pady=20)
+
     sticker_options = ["Ya", "Tidak"]
     clicked_bribox = tk.StringVar()
-    clicked_bribox.set( "Select" )
-    tk.OptionMenu( root , clicked_bribox , *sticker_options ).grid(column = 1, row = rows)
-    rows+=1
-    
-    # for item in image_dict_list:
-    #     attachment_label = Label(root, text=f'Attachment {item} : ')
-    #     attachment_label.grid(column = 0, row = rows, sticky='w', pady=20)
-    #     # attachment_label.pack(fill=X, expand=True)
+    clicked_bribox.set("Select")
+    tk.OptionMenu(second_frame, clicked_bribox, *
+                  sticker_options).grid(column=1, row=rows)
+    rows += 1
 
-    #     attachment_button = ttk.Button(
-    #         root,
-    #         text='Open Attachment Image',
-    #         command=saveImagePath
-    #     ).grid(column = 1, row = rows, sticky='nesw', pady=20)
+    for item in image_dict_list:
+        attachment_label = tk.Label(second_frame, text=f'Foto {item}  : ')
+        attachment_label.grid(column=0, row=rows, sticky='w', pady=20)
+        # attachment_label.pack(fill=X, expand=True)
+
+        attachment_button = tk.Button(
+            second_frame,
+            text=f'Pilih foto {item}',
+            command=saveImagePath,
+        ).grid(column=1, row=rows, pady=20)
+        rows += 1
+
+    additional_info_label = tk.Label(second_frame, text='Informasi Tambahan  :')
+    additional_info_label.grid(column=0, row=rows, sticky='w', pady=20)
+    # worker_branch_code_label.pack(side = LEFT,fill=X, expand=True)
+
+    text_area = scrolledtext.ScrolledText(
+        second_frame, wrap=tk.WORD, width=25, height=5)
+    text_area.insert('insert', 'ex: password ditempel di meja kerja, dll.\nIsi \'-\' jika tidak ada', 0)
+    text_area.bind("<Button-1>", lambda x: text_area.delete(0.0, tk.END))
+    text_area.grid(column=1, row=rows, sticky='w')
+    rows += 1
 
     ttk.Button(
-        root,
+        second_frame,
         text="Submit",
         command=getStartProcedures,
-    ).grid(column = 2, row = rows,sticky='nesw', pady=20)
-    # start_button.pack(
-    #     ipadx=5,
-    #     ipady=5,
-    #     expand=True
-    # )
+    ).grid(column=1, row=rows, pady=20)
 
     root.mainloop()
